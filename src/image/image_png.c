@@ -33,6 +33,11 @@ plainsight_error plainsight_image_png_read(const char *path, plainsight_image *i
         return PLAINSIGHT_ERR_ARGS;
     }
 
+    // Pixel storage is caller-provided so this backend never uses large stack buffers
+    if (image->pixels == NULL || image->pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
     // png_image API requires version field before any decode call
     png_image_state.version = PNG_IMAGE_VERSION;
 
@@ -51,6 +56,12 @@ plainsight_error plainsight_image_png_read(const char *path, plainsight_image *i
     if (result_code != PLAINSIGHT_OK) {
         png_image_free(&png_image_state);
         return result_code;
+    }
+
+    // Capacity check is explicit so decode never writes past the bound storage
+    if ((uint64_t)png_image_bytes > (uint64_t)image->pixels_cap) {
+        png_image_free(&png_image_state);
+        return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
     if (png_image_finish_read(&png_image_state, NULL, image->pixels, 0, NULL) == 0) {
@@ -76,6 +87,11 @@ plainsight_error plainsight_image_png_write(const char *path, const plainsight_i
         return PLAINSIGHT_ERR_ARGS;
     }
 
+    // Writer requires bound pixel storage and a consistent pixel length
+    if (image->pixels == NULL || image->pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
     // Write path accepts only normalized non-empty RGB images
     if (image->channels != 3u || image->width == 0u || image->height == 0u) {
         return PLAINSIGHT_ERR_ARGS;
@@ -90,6 +106,10 @@ plainsight_error plainsight_image_png_write(const char *path, const plainsight_i
 
     if (expected_bytes != (uint64_t)image->data_len) {
         // Mismatched byte count indicates corrupted caller state
+        return PLAINSIGHT_ERR_BAD_FORMAT;
+    }
+    // pixels_cap mismatch indicates corrupted caller state or wrong binding
+    if (expected_bytes > (uint64_t)image->pixels_cap) {
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 

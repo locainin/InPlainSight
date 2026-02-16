@@ -99,6 +99,11 @@ plainsight_error plainsight_image_bmp_read(const char *path, plainsight_image *i
         return PLAINSIGHT_ERR_ARGS;
     }
 
+    // BMP decode writes into caller-provided pixel storage
+    if (image->pixels == NULL || image->pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
     result_code = plainsight_io_read_file(path, g_bmp_input_bytes, sizeof(g_bmp_input_bytes), &input_length);
     if (result_code != PLAINSIGHT_OK) {
         return result_code;
@@ -145,6 +150,11 @@ plainsight_error plainsight_image_bmp_read(const char *path, plainsight_image *i
     result_code = plainsight_bmp_validate_geometry(image_width, image_height, rgb_bytes);
     if (result_code != PLAINSIGHT_OK) {
         return result_code;
+    }
+
+    // pixels_cap guards writes into the decoded RGB buffer
+    if (rgb_bytes > (uint64_t)image->pixels_cap) {
+        return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
     result_code = plainsight_bmp_compute_row_stride(image_width, &row_stride);
@@ -212,6 +222,11 @@ plainsight_error plainsight_image_bmp_write(const char *path, const plainsight_i
         return PLAINSIGHT_ERR_ARGS;
     }
 
+    // Writer requires bound pixel storage so RGB reads stay within the caller-provided buffer
+    if (image->pixels == NULL || image->pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
     image_width = image->width;
     image_height = image->height;
     rgb_bytes = (uint64_t)image_width * (uint64_t)image_height * 3u;
@@ -220,6 +235,11 @@ plainsight_error plainsight_image_bmp_write(const char *path, const plainsight_i
         return PLAINSIGHT_ERR_ARGS;
     }
     if ((uint64_t)image->data_len != rgb_bytes) {
+        return PLAINSIGHT_ERR_BAD_FORMAT;
+    }
+
+    // pixels_cap mismatch indicates corrupted caller state or invalid binding
+    if (rgb_bytes > (uint64_t)image->pixels_cap) {
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 

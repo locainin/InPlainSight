@@ -8,6 +8,26 @@
 
 #include "cli_internal.h"
 
+static uint8_t plainsight_cli_hex_nibble(uint8_t value) {
+    // Hex encoding keeps temp names ASCII-only and avoids locale-sensitive formatting
+    value &= 0x0Fu;
+    if (value < 10u) {
+        return (uint8_t)('0' + value);
+    }
+    return (uint8_t)('a' + (value - 10u));
+}
+
+static void plainsight_cli_hex_encode_8_bytes(const uint8_t in[8], char out[16]) {
+    size_t index = 0u;
+
+    // 8 bytes expands into 16 lowercase hex characters
+    for (index = 0u; index < 8u; index++) {
+        uint8_t byte_value = in[index];
+        out[index * 2u + 0u] = (char)plainsight_cli_hex_nibble((uint8_t)(byte_value >> 4u));
+        out[index * 2u + 1u] = (char)plainsight_cli_hex_nibble(byte_value);
+    }
+}
+
 static plainsight_error plainsight_cli_copy_text(const char *source_text,
                                  size_t source_len,
                                  char *out,
@@ -144,9 +164,19 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
     size_t ext_len = 0u;
     size_t dir_prefix_len = 0u;
     plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
+    int final_exists = 0;
+    unsigned int attempt = 0u;
 
     if (final_path == NULL || image == NULL) {
         return PLAINSIGHT_ERR_ARGS;
+    }
+
+    // Refuse overwrite so callers can safely use atomic writes without clobbering existing outputs
+    if (plainsight_cli_path_exists(final_path, &final_exists) != PLAINSIGHT_OK) {
+        return PLAINSIGHT_ERR_IO;
+    }
+    if (final_exists != 0) {
+        return PLAINSIGHT_ERR_IO;
     }
 
     // Find basename start so temp file can live next to the final path
@@ -186,28 +216,6 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
     prefix_len = dot_index;
     ext_len = basename_len - dot_index;
 
-    // temp_name becomes ".<prefix>.tmp<ext>" so it still ends with the original extension
-    // This keeps the write backend identical for temp and final paths
-    temp_name[temp_index++] = '.';
-
-    for (final_index = 0u; final_index < prefix_len; final_index++) {
-        temp_name[temp_index++] = final_path[basename_start + final_index];
-    }
-
-    temp_name[temp_index++] = '.';
-    temp_name[temp_index++] = 't';
-    temp_name[temp_index++] = 'm';
-    temp_name[temp_index++] = 'p';
-
-    for (final_index = 0u; final_index < ext_len; final_index++) {
-        temp_name[temp_index++] = final_path[basename_start + dot_index + final_index];
-    }
-
-    if (temp_index >= sizeof(temp_name)) {
-        return PLAINSIGHT_ERR_TOO_LARGE;
-    }
-    temp_name[temp_index] = '\0';
-
     // temp_path becomes "<dir_prefix><temp_name>"
     dir_prefix_len = basename_start;
     if (dir_prefix_len >= sizeof(temp_path)) {
@@ -218,11 +226,66 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
-    {
+    // temp_name includes a random suffix so concurrent writers do not collide
+    // The name still ends with the original extension so the encoder backend selection stays consistent
+    for (attempt = 0u; attempt < 16u; attempt++) {
+        uint8_t suffix_bytes[8];
+        char suffix_hex[16];
+        size_t suffix_index = 0u;
         size_t temp_name_len = 0u;
+        int temp_exists = 0;
+
+        // Random suffix reduces the chance of collisions and keeps temp files unguessable
+        result_code = plainsight_crypto_fill_random(suffix_bytes, sizeof(suffix_bytes));
+        if (result_code != PLAINSIGHT_OK) {
+            return result_code;
+        }
+
+        plainsight_cli_hex_encode_8_bytes(suffix_bytes, suffix_hex);
+
+        temp_index = 0u;
+        temp_name[temp_index++] = '.';
+        for (final_index = 0u; final_index < prefix_len; final_index++) {
+            if (temp_index + 1u >= sizeof(temp_name)) {
+                return PLAINSIGHT_ERR_TOO_LARGE;
+            }
+            temp_name[temp_index++] = final_path[basename_start + final_index];
+        }
+        if (temp_index + 6u >= sizeof(temp_name)) {
+            return PLAINSIGHT_ERR_TOO_LARGE;
+        }
+        temp_name[temp_index++] = '.';
+        temp_name[temp_index++] = 't';
+        temp_name[temp_index++] = 'm';
+        temp_name[temp_index++] = 'p';
+        temp_name[temp_index++] = '.';
+
+        for (suffix_index = 0u; suffix_index < sizeof(suffix_hex); suffix_index++) {
+            if (temp_index + 1u >= sizeof(temp_name)) {
+                return PLAINSIGHT_ERR_TOO_LARGE;
+            }
+            temp_name[temp_index++] = suffix_hex[suffix_index];
+        }
+
+        for (final_index = 0u; final_index < ext_len; final_index++) {
+            if (temp_index + 1u >= sizeof(temp_name)) {
+                return PLAINSIGHT_ERR_TOO_LARGE;
+            }
+            temp_name[temp_index++] = final_path[basename_start + dot_index + final_index];
+        }
+        if (temp_index >= sizeof(temp_name)) {
+            return PLAINSIGHT_ERR_TOO_LARGE;
+        }
+        temp_name[temp_index] = '\0';
+
         while (temp_name[temp_name_len] != '\0') {
             temp_name_len++;
         }
+
+        if (dir_prefix_len + temp_name_len + 1u > sizeof(temp_path)) {
+            return PLAINSIGHT_ERR_TOO_LARGE;
+        }
+
         if (plainsight_cli_copy_text(temp_name,
                              temp_name_len,
                              temp_path + dir_prefix_len,
@@ -230,11 +293,22 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
                              &temp_name_len) != PLAINSIGHT_OK) {
             return PLAINSIGHT_ERR_TOO_LARGE;
         }
+
+        // Existence probe keeps the temp path collision-free without relying on a fixed name
+        if (plainsight_cli_path_exists(temp_path, &temp_exists) != PLAINSIGHT_OK) {
+            return PLAINSIGHT_ERR_IO;
+        }
+        if (temp_exists == 0) {
+            break;
+        }
     }
 
-    // Write image to temp path first so failures do not leave partial final files
+    if (attempt >= 16u) {
+        return PLAINSIGHT_ERR_IO;
+    }
+
+    // Write image to the temp path first so failures do not leave partial final files
     // rename is used at the end to make the final path appear in one step
-    // This is best-effort atomic behavior and relies on preflight to avoid overwriting existing files
     result_code = plainsight_cli_store_image(temp_path, image);
     if (result_code != PLAINSIGHT_OK) {
         (void)unlink(temp_path);

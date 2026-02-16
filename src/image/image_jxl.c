@@ -37,6 +37,11 @@ plainsight_error plainsight_image_jxl_read(const char *path, plainsight_image *i
         return PLAINSIGHT_ERR_ARGS;
     }
 
+    // Caller provides pixel storage so this backend stays heap-free for full frames
+    if (image->pixels == NULL || image->pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
     // Decode starts from a bounded in-memory buffer
     result_code = plainsight_io_read_file(path, g_jxl_input, sizeof(g_jxl_input), &input_len);
     if (result_code != PLAINSIGHT_OK) {
@@ -132,6 +137,12 @@ plainsight_error plainsight_image_jxl_read(const char *path, plainsight_image *i
                 goto cleanup;
             }
 
+            // pixels_cap check keeps decoder writes inside bound storage
+            if (output_buffer_size > image->pixels_cap) {
+                result_code = PLAINSIGHT_ERR_TOO_LARGE;
+                goto cleanup;
+            }
+
             // This backend expects tightly packed RGB8 output without row padding
             if (decoded_width > 0u && decoded_height > 0u) {
                 if ((uint64_t)decoded_width * (uint64_t)decoded_height > (uint64_t)(SIZE_MAX / 3u)) {
@@ -205,11 +216,21 @@ plainsight_error plainsight_image_jxl_write(const char *path, const plainsight_i
         return PLAINSIGHT_ERR_ARGS;
     }
 
+    // Writer reads RGB bytes from caller-provided storage only
+    if (image->pixels == NULL || image->pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
     if (image->width == 0u || image->height == 0u || image->channels != 3u) {
         return PLAINSIGHT_ERR_ARGS;
     }
 
     if ((uint64_t)image->width * (uint64_t)image->height * 3u != (uint64_t)image->data_len) {
+        return PLAINSIGHT_ERR_BAD_FORMAT;
+    }
+
+    // pixels_cap mismatch indicates corrupted caller state or invalid binding
+    if ((uint64_t)image->data_len > (uint64_t)image->pixels_cap) {
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 

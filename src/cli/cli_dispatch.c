@@ -61,6 +61,10 @@ int plainsight_cli_run(int argc, char **argv) {
         return 0;
     }
 
+    // Workspace init binds image pixel storage to a stable buffer
+    // This prevents accidental large stack allocations and keeps image IO consistent
+    plainsight_cli_workspace_init();
+
     result_code = plainsight_crypto_init();
     if (result_code != PLAINSIGHT_OK) {
         (void)fputs("crypto init failed\n", stderr);

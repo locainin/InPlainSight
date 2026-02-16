@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 // Reads a JPEG image into RGB bytes
-// Caller passes plainsight_image with built-in pixels buffer sized for PLAINSIGHT_MAX_IMAGE_BYTES
+// Caller must bind pixel storage via plainsight_image_bind_storage before calling read
 // Backend is decode-only to avoid lossy output surprises
 plainsight_error plainsight_image_jpeg_read(const char *path, plainsight_image *image);
 

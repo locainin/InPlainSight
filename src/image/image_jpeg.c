@@ -60,6 +60,11 @@ plainsight_error plainsight_image_jpeg_read(const char *path, plainsight_image *
         return PLAINSIGHT_ERR_ARGS;
     }
 
+    // Caller binds pixel storage so this backend never uses large stack buffers for full images
+    if (image->pixels == NULL || image->pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
     input_stream = fopen(path, "rb");
     if (input_stream == NULL) {
         return PLAINSIGHT_ERR_IO;
@@ -98,6 +103,14 @@ plainsight_error plainsight_image_jpeg_read(const char *path, plainsight_image *
         jpeg_destroy_decompress(&jpeg_state);
         (void)fclose(input_stream);
         return result_code;
+    }
+
+    // pixels_cap prevents decoded rows from exceeding the bound destination storage
+    if (rgb_bytes > (uint64_t)image->pixels_cap) {
+        jpeg_finish_decompress(&jpeg_state);
+        jpeg_destroy_decompress(&jpeg_state);
+        (void)fclose(input_stream);
+        return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
     if ((uint64_t)jpeg_state.output_width * 3u > sizeof(g_jpeg_row_buffer)) {

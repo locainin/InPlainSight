@@ -42,6 +42,11 @@ plainsight_error plainsight_image_webp_read(const char *path, plainsight_image *
         return PLAINSIGHT_ERR_ARGS;
     }
 
+    // Pixel output is caller-provided so this backend stays heap-free
+    if (image->pixels == NULL || image->pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
     // Read compressed input into a bounded scratch buffer
     result_code = plainsight_io_read_file(path, g_webp_input_bytes, sizeof(g_webp_input_bytes), &input_length);
     if (result_code != PLAINSIGHT_OK) {
@@ -61,6 +66,11 @@ plainsight_error plainsight_image_webp_read(const char *path, plainsight_image *
     result_code = plainsight_webp_validate_geometry((uint32_t)decoded_width, (uint32_t)decoded_height, rgb_bytes);
     if (result_code != PLAINSIGHT_OK) {
         return result_code;
+    }
+
+    // pixels_cap guards WebPDecodeRGBInto destination size
+    if (rgb_bytes > (uint64_t)image->pixels_cap) {
+        return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
     // Decode directly into final RGB buffer so no extra copy is needed

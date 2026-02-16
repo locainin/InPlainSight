@@ -251,6 +251,11 @@ plainsight_error plainsight_image_ppm_read(const char *path, plainsight_image *i
         return PLAINSIGHT_ERR_ARGS;
     }
 
+    // PPM decode writes into caller-provided pixel storage
+    if (image->pixels == NULL || image->pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
     result_code = plainsight_io_read_file(path, g_ppm_input_bytes, sizeof(g_ppm_input_bytes), &input_length);
     if (result_code != PLAINSIGHT_OK) {
         return result_code;
@@ -321,6 +326,11 @@ plainsight_error plainsight_image_ppm_read(const char *path, plainsight_image *i
         return result_code;
     }
 
+    // pixels_cap guards the destination storage before the raster is copied
+    if (rgb_bytes > (uint64_t)image->pixels_cap) {
+        return PLAINSIGHT_ERR_TOO_LARGE;
+    }
+
     result_code = plainsight_ppm_consume_raster_delimiter(g_ppm_input_bytes, input_length, &cursor_offset);
     if (result_code != PLAINSIGHT_OK) {
         return result_code;
@@ -361,6 +371,11 @@ plainsight_error plainsight_image_ppm_write(const char *path, const plainsight_i
         return PLAINSIGHT_ERR_ARGS;
     }
 
+    // Writer requires bound pixel storage and consistent RGB byte length
+    if (image->pixels == NULL || image->pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
     image_width = image->width;
     image_height = image->height;
     rgb_bytes = (uint64_t)image_width * (uint64_t)image_height * 3u;
@@ -369,6 +384,11 @@ plainsight_error plainsight_image_ppm_write(const char *path, const plainsight_i
         return PLAINSIGHT_ERR_ARGS;
     }
     if ((uint64_t)image->data_len != rgb_bytes) {
+        return PLAINSIGHT_ERR_BAD_FORMAT;
+    }
+
+    // pixels_cap mismatch indicates corrupted caller state or invalid binding
+    if (rgb_bytes > (uint64_t)image->pixels_cap) {
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 

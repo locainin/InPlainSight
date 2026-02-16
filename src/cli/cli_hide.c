@@ -47,6 +47,7 @@ plainsight_error plainsight_cli_run_hide(const plainsight_hide_options *options)
     plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
     plainsight_error passphrase_lock_result = PLAINSIGHT_OK;
     plainsight_error payload_size_result = PLAINSIGHT_ERR_INTERNAL;
+    int output_exists = 0;
     plainsight_kdf_params kdf_params;
     plainsight_inner_header inner_header;
     plainsight_outer_header outer_header;
@@ -75,6 +76,16 @@ plainsight_error plainsight_cli_run_hide(const plainsight_hide_options *options)
     if (options->split_auto != 0) {
         // Split coordinator lives in a dedicated module to keep this file focused
         return plainsight_cli_run_hide_split(options);
+    }
+
+    // Refuse overwrite so automation cannot accidentally destroy existing files
+    // Single-image hide uses atomic output, but overwrite refusal is still enforced up front
+    result_code = plainsight_cli_path_exists(options->output_path, &output_exists);
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
+    if (output_exists != 0) {
+        return PLAINSIGHT_ERR_IO;
     }
 
     // Secrets enter memory once and are locked when possible
@@ -244,7 +255,8 @@ plainsight_error plainsight_cli_run_hide(const plainsight_hide_options *options)
         goto cleanup;
     }
 
-    result_code = plainsight_cli_store_image(options->output_path, &g_cli_workspace.image);
+    // Store stego output atomically so failures do not leave partial images
+    result_code = plainsight_cli_store_image_atomic(options->output_path, &g_cli_workspace.image);
 
 cleanup:
     // Always wipe transient secrets regardless of success or failure

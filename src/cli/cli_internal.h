@@ -73,7 +73,9 @@ typedef struct plainsight_info_options {
 } plainsight_info_options;
 
 typedef struct plainsight_workspace {
-    // Decoded image pixels and geometry
+    // Pixel storage lives outside plainsight_image to avoid accidental stack allocation blowups
+    uint8_t image_pixels[PLAINSIGHT_MAX_IMAGE_BYTES];
+    // Decoded image view over image_pixels
     plainsight_image image;
     // Plain payload bytes loaded from disk
     uint8_t payload[PLAINSIGHT_MAX_PAYLOAD_BYTES];
@@ -90,6 +92,10 @@ typedef struct plainsight_workspace {
 } plainsight_workspace;
 
 extern plainsight_workspace g_cli_workspace;
+
+// Initializes g_cli_workspace fields that require runtime binding
+// This is called once at CLI startup before any image decode or encode occurs
+void plainsight_cli_workspace_init(void);
 
 void plainsight_cli_print_usage(const char *program_path);
 

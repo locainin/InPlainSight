@@ -26,14 +26,29 @@ typedef enum plainsight_image_format {
 } plainsight_image_format;
 
 // Unified in-memory image layout used by all backends
-// pixels storage is fixed-size and must hold up to PLAINSIGHT_MAX_IMAGE_BYTES
+// Pixel storage is caller-provided to avoid accidental large stack allocations
 typedef struct plainsight_image {
     uint32_t width;
     uint32_t height;
     uint8_t channels;
     size_t data_len;
-    uint8_t pixels[PLAINSIGHT_MAX_IMAGE_BYTES];
+    uint8_t *pixels;
+    size_t pixels_cap;
 } plainsight_image;
+
+// Binds an external pixel buffer to a plainsight_image instance
+// Callers must provide storage large enough for decoded RGB bytes
+static inline plainsight_error plainsight_image_bind_storage(plainsight_image *image,
+                                             uint8_t *pixels,
+                                             size_t pixels_cap) {
+    if (image == NULL || pixels == NULL || pixels_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
+    image->pixels = pixels;
+    image->pixels_cap = pixels_cap;
+    return PLAINSIGHT_OK;
+}
 
 // Picks backend based on file extension
 plainsight_image_format plainsight_image_detect_format_from_path(const char *path);
