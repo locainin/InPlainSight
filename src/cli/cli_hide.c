@@ -1,0 +1,265 @@
+#include <stddef.h>
+#include <stdint.h>
+#include <limits.h>
+#include <stdio.h>
+
+#include "cli_internal.h"
+
+static void plainsight_cli_write_u64_stderr(uint64_t value) {
+    uint8_t reversed_digits[32];
+    size_t digit_count = 0u;
+    size_t output_index = 0u;
+
+    if (value == 0u) {
+        (void)fputc('0', stderr);
+        return;
+    }
+
+    // Build digits in reverse order then write forward for decimal output
+    while (value > 0u && digit_count < sizeof(reversed_digits)) {
+        reversed_digits[digit_count] = (uint8_t)('0' + (uint8_t)(value % 10u));
+        value /= 10u;
+        digit_count++;
+    }
+
+    while (output_index < digit_count) {
+        size_t reverse_index = digit_count - 1u - output_index;
+        (void)fputc((int)reversed_digits[reverse_index], stderr);
+        output_index++;
+    }
+}
+
+static void plainsight_cli_log_hide_size_limits(uint64_t payload_file_size, uint64_t max_payload_by_cover) {
+    // Keep preflight output line-based so UI log panel can display exact numbers
+    (void)fputs("hide preflight failed: payload exceeds safe limits\n", stderr);
+    (void)fputs("  payload bytes: ", stderr);
+    plainsight_cli_write_u64_stderr(payload_file_size);
+    (void)fputc('\n', stderr);
+    (void)fputs("  max payload by selected cover: ", stderr);
+    plainsight_cli_write_u64_stderr(max_payload_by_cover);
+    (void)fputc('\n', stderr);
+    (void)fputs("  project payload cap: ", stderr);
+    plainsight_cli_write_u64_stderr((uint64_t)PLAINSIGHT_MAX_PAYLOAD_BYTES);
+    (void)fputs(" bytes\n", stderr);
+}
+
+plainsight_error plainsight_cli_run_hide(const plainsight_hide_options *options) {
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
+    plainsight_error passphrase_lock_result = PLAINSIGHT_OK;
+    plainsight_error payload_size_result = PLAINSIGHT_ERR_INTERNAL;
+    plainsight_kdf_params kdf_params;
+    plainsight_inner_header inner_header;
+    plainsight_outer_header outer_header;
+    uint8_t encryption_key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES];
+    uint8_t embed_seed[32];
+    size_t passphrase_length = 0u;
+    size_t payload_length = 0u;
+    size_t inner_length = 0u;
+    size_t ciphertext_length = 0u;
+    size_t container_length = 0u;
+    size_t payload_name_length = 0u;
+    uint64_t payload_file_size = 0u;
+    uint64_t max_payload_by_cover = 0u;
+    plainsight_capacity_input capacity_input;
+    plainsight_capacity_report capacity_report;
+    static const uint8_t mime_octet_stream[] = {
+        (uint8_t)'a', (uint8_t)'p', (uint8_t)'p', (uint8_t)'l', (uint8_t)'i',
+        (uint8_t)'c', (uint8_t)'a', (uint8_t)'t', (uint8_t)'i', (uint8_t)'o',
+        (uint8_t)'n', (uint8_t)'/', (uint8_t)'o', (uint8_t)'c', (uint8_t)'t',
+        (uint8_t)'e', (uint8_t)'t', (uint8_t)'-', (uint8_t)'s', (uint8_t)'t',
+        (uint8_t)'r', (uint8_t)'e', (uint8_t)'a', (uint8_t)'m'};
+
+    if (options == NULL) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+    if (options->split_auto != 0) {
+        // Split coordinator lives in a dedicated module to keep this file focused
+        return plainsight_cli_run_hide_split(options);
+    }
+
+    // Secrets enter memory once and are locked when possible
+    result_code = plainsight_io_read_passphrase_file(options->passphrase_path,
+                                             g_cli_workspace.passphrase,
+                                             sizeof(g_cli_workspace.passphrase),
+                                             &passphrase_length);
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
+
+    passphrase_lock_result = plainsight_secure_lock(g_cli_workspace.passphrase, passphrase_length);
+
+    // Parse basename early so preflight can account for inner metadata overhead
+    result_code = plainsight_io_copy_basename(options->payload_path,
+                                      g_cli_workspace.payload_name,
+                                      sizeof(g_cli_workspace.payload_name),
+                                      &payload_name_length);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    if (payload_name_length > (size_t)UINT16_MAX) {
+        result_code = PLAINSIGHT_ERR_TOO_LARGE;
+        goto cleanup;
+    }
+    if (sizeof(mime_octet_stream) > (size_t)UINT16_MAX) {
+        result_code = PLAINSIGHT_ERR_TOO_LARGE;
+        goto cleanup;
+    }
+
+    // Decode cover before payload read so capacity checks can fail early with details
+    result_code = plainsight_cli_load_image(options->cover_path, &g_cli_workspace.image);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    capacity_input.cover_data_bytes = (uint64_t)g_cli_workspace.image.data_len;
+    capacity_input.lsb_bits = 1u;
+    capacity_input.density_per_mille = 1000u;
+    capacity_input.payload_name_len = payload_name_length;
+    capacity_input.mime_len = sizeof(mime_octet_stream);
+
+    result_code = plainsight_capacity_compute_lsb(&capacity_input, &capacity_report);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+    max_payload_by_cover = capacity_report.max_payload_by_cover_bytes;
+
+    payload_size_result = plainsight_io_get_regular_file_size(options->payload_path, &payload_file_size);
+    if (payload_size_result == PLAINSIGHT_OK) {
+        // Project cap is a hard bound independent of cover dimensions
+        if (payload_file_size > (uint64_t)PLAINSIGHT_MAX_PAYLOAD_BYTES) {
+            plainsight_cli_log_hide_size_limits(payload_file_size, max_payload_by_cover);
+            result_code = PLAINSIGHT_ERR_TOO_LARGE;
+            goto cleanup;
+        }
+
+        // Cover-derived max payload reflects all container overhead in this run
+        if (payload_file_size > max_payload_by_cover) {
+            plainsight_cli_log_hide_size_limits(payload_file_size, max_payload_by_cover);
+            result_code = PLAINSIGHT_ERR_CAPACITY;
+            goto cleanup;
+        }
+    }
+
+    // Payload stays in memory, no plaintext temporary file is created
+    result_code = plainsight_io_read_file(options->payload_path,
+                                  g_cli_workspace.payload,
+                                  sizeof(g_cli_workspace.payload),
+                                  &payload_length);
+    if (result_code != PLAINSIGHT_OK) {
+        if (result_code == PLAINSIGHT_ERR_TOO_LARGE) {
+            (void)fputs("hide preflight failed: payload file is larger than project cap of ", stderr);
+            plainsight_cli_write_u64_stderr((uint64_t)PLAINSIGHT_MAX_PAYLOAD_BYTES);
+            (void)fputs(" bytes\n", stderr);
+        }
+        goto cleanup;
+    }
+
+    // Metadata lives inside AEAD-protected inner payload
+    inner_header.compression = 0u;
+    inner_header.name = (const uint8_t *)g_cli_workspace.payload_name;
+    inner_header.name_len = (uint16_t)payload_name_length;
+    inner_header.mime = mime_octet_stream;
+    inner_header.mime_len = (uint16_t)sizeof(mime_octet_stream);
+    inner_header.payload = g_cli_workspace.payload;
+    inner_header.payload_len = payload_length;
+
+    // Inner container is encrypted as one authenticated blob
+    result_code = plainsight_container_pack_inner(&inner_header,
+                                          g_cli_workspace.inner,
+                                          sizeof(g_cli_workspace.inner),
+                                          &inner_length);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    kdf_params.opslimit = (uint64_t)crypto_pwhash_OPSLIMIT_INTERACTIVE;
+    kdf_params.memlimit = (uint64_t)crypto_pwhash_MEMLIMIT_INTERACTIVE;
+    kdf_params.alg = (uint16_t)crypto_pwhash_ALG_ARGON2ID13;
+
+    outer_header.version = PLAINSIGHT_CONTAINER_VERSION;
+    outer_header.kdf_alg = kdf_params.alg;
+    outer_header.kdf_opslimit = kdf_params.opslimit;
+    outer_header.kdf_memlimit = kdf_params.memlimit;
+
+    // Outer header fields needed for KDF and decrypt are public by design
+    result_code = plainsight_crypto_fill_random(outer_header.salt, sizeof(outer_header.salt));
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    result_code = plainsight_crypto_fill_random(outer_header.nonce, sizeof(outer_header.nonce));
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    result_code = plainsight_crypto_derive_key(
+        g_cli_workspace.passphrase, passphrase_length, outer_header.salt, &kdf_params, encryption_key);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    result_code = plainsight_crypto_encrypt(encryption_key,
+                                    outer_header.nonce,
+                                    g_cli_workspace.inner,
+                                    inner_length,
+                                    g_cli_workspace.ciphertext,
+                                    sizeof(g_cli_workspace.ciphertext),
+                                    &ciphertext_length);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    outer_header.ciphertext_len = ciphertext_length;
+
+    result_code = plainsight_container_pack_outer(&outer_header,
+                                          g_cli_workspace.ciphertext,
+                                          ciphertext_length,
+                                          g_cli_workspace.container,
+                                          sizeof(g_cli_workspace.container),
+                                          &container_length);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    // Seed includes LSB-masked cover bytes so mapping is image-specific
+    result_code = plainsight_crypto_seed_from_passphrase_and_cover(g_cli_workspace.passphrase,
+                                                            passphrase_length,
+                                                            g_cli_workspace.image.pixels,
+                                                            g_cli_workspace.image.data_len,
+                                                            embed_seed);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    // Embedding happens only after encryption output is finalized
+    result_code = plainsight_embed_payload(options->method,
+                                   g_cli_workspace.image.pixels,
+                                   g_cli_workspace.image.data_len,
+                                   g_cli_workspace.image.channels,
+                                   g_cli_workspace.container,
+                                   container_length,
+                                   embed_seed);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    result_code = plainsight_cli_store_image(options->output_path, &g_cli_workspace.image);
+
+cleanup:
+    // Always wipe transient secrets regardless of success or failure
+    plainsight_secure_zero(embed_seed, sizeof(embed_seed));
+    plainsight_secure_zero(encryption_key, sizeof(encryption_key));
+    plainsight_secure_zero(g_cli_workspace.payload, sizeof(g_cli_workspace.payload));
+    plainsight_secure_zero(g_cli_workspace.payload_name, sizeof(g_cli_workspace.payload_name));
+    plainsight_secure_zero(g_cli_workspace.inner, sizeof(g_cli_workspace.inner));
+    plainsight_secure_zero(g_cli_workspace.ciphertext, sizeof(g_cli_workspace.ciphertext));
+
+    if (passphrase_lock_result == PLAINSIGHT_OK) {
+        (void)plainsight_secure_unlock(g_cli_workspace.passphrase, passphrase_length);
+    } else {
+        plainsight_secure_zero(g_cli_workspace.passphrase, passphrase_length);
+    }
+
+    return result_code;
+}

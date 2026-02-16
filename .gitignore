@@ -1,0 +1,23 @@
+# Build outputs (C)
+/build/
+/*.o
+/*.d
+
+# Built binaries
+/inplainsight
+/inplainsight-clang
+/inplainsight-gcc-release
+/inplainsight-clang-release
+
+
+# Rust build outputs
+/ui/target/
+
+# Tooling outputs
+/compile_commands.json
+
+# Local run artifacts
+/final/
+
+# Local editor caches
+/.cache/
