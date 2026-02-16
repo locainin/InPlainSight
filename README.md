@@ -1,6 +1,6 @@
 # InPlainSight
 
-InPlainSight this is an educational steganography project written in C for the (CLI) with a Rust GTK4 (GUI)
+This is an educational steganography project written in C for the (CLI) with a Rust GTK4 (GUI)
 
 ![InPlainSight Studio screenshot](assets/VisualDisplay.png)
 
@@ -121,4 +121,4 @@ Optional:
 
 ## More Details
 
-- Technical design and module breakdown: `docs/TECHNICAL.md`
+- [Technical design and module breakdown:] (docs/TECHNICAL.md)
