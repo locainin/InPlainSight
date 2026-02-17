@@ -1,14 +1,20 @@
 # InPlainSight
 
-InPlainSight this is an educational steganography project written in C for the (CLI) with a Rust GTK4 (GUI)
+InPlainSight is an educational steganography project written in C (CLI) with a Rust GTK4 UI.
 
 ![InPlainSight Studio screenshot](assets/VisualDisplay.png)
 
 ## Educational Scope
 
-- This project is for education, research, and defensive security learning
-- Encryption is the security boundary
-- Steganography is the storage mechanism, cryptography is what protects the payload
+- This project is for education, research, and security learning
+- It uses encryption so the payload stays a secret
+- It uses pixel-domain steganography to store those encrypted bytes inside an image
+- The Goal of this project was to be able to store text/PDFs within an image.
+
+Two layers are involved:
+
+- Cryptography is the lock: it protects confidentiality and makes edits obvious during extraction
+- Steganography is the actual hiding within the image: it decides where encrypted bytes live inside pixels so the file still looks like a normal image file
 
 ## Limitations (Read This First)
 
@@ -23,9 +29,10 @@ InPlainSight this is an educational steganography project written in C for the (
 
 1. Read the payload bytes (a file, or text from the UI)
 2. Derive keys from the passphrase (Argon2id)
-3. Encrypt and authenticate the payload (XChaCha20-Poly1305)
-4. Embed the encrypted bytes into a lossless cover image (pixel-domain embedding)
-5. On extract: pull bytes back out, verify authentication, then write the original bytes
+3. Encrypt and authenticate (XChaCha20-Poly1305)
+4. Derive an image-specific embedding seed from the passphrase and the cover pixels (with LSBs masked)
+5. Embed the encrypted container bytes into a lossless cover image (pixel-domain embedding)
+6. On extract: derive the same seed, pull bytes back out, verify authentication, then write the original bytes
 
 ## CLI Usage
 
@@ -113,11 +120,12 @@ Optional:
 - C dependencies: `libsodium`, `libpng`, `libjpeg`, `libwebp`, `libjxl` (optional at runtime, supported when installed)
 - This repo intentionally enforces strict compiler warnings and sanitizer builds during testing
 
-## Ethics / Responsible Use
+## Warnings / Ethics / Responsible Use
 
-- This project is meant for learning and defensive analysis
-- Do not use it to conceal illegal activity or violate privacy expectations
-  The goal is to understand how these techniques work and how they are detected
+- This project is meant for learning and analysis, it is in no way meant for real-world use. 
+- It is not suggested to embed anything within an image to send to others. 
+
+The goal is to understand how these techniques work and how they are detected
 
 ## More Details
 
