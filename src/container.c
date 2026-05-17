@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -7,7 +10,6 @@ static const uint8_t PLAINSIGHT_CONTAINER_MAGIC[PLAINSIGHT_CONTAINER_MAGIC_LEN] 
     (uint8_t)'H', (uint8_t)'I', (uint8_t)'I', (uint8_t)'C',
     (uint8_t)'T', (uint8_t)'R', (uint8_t)'0', (uint8_t)'1'
 };
-static const uint8_t PLAINSIGHT_COMPRESSION_NONE = 0u;
 
 static void plainsight_write_u16_le(uint8_t *output_bytes, uint16_t value) {
     output_bytes[0] = (uint8_t)(value & 0xFFu);
@@ -38,27 +40,52 @@ static uint64_t plainsight_read_u64_le(const uint8_t *input_bytes) {
 }
 
 static plainsight_error plainsight_copy_bytes(uint8_t *destination_bytes,
-                              size_t destination_capacity,
-                              size_t *destination_offset,
-                              const uint8_t *source_bytes,
-                              size_t source_length) {
+                                              size_t destination_capacity,
+                                              size_t *destination_offset,
+                                              const uint8_t *source_bytes,
+                                              size_t source_length) {
     size_t source_index = 0u;
 
     if (destination_bytes == NULL || destination_offset == NULL || (source_bytes == NULL && source_length > 0u)) {
         return PLAINSIGHT_ERR_ARGS;
     }
 
-    // Bounds check uses offset-first style to avoid wrap surprises
     if (*destination_offset > destination_capacity ||
         source_length > (destination_capacity - *destination_offset)) {
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
-    // Byte copy stays explicit so bounds logic is easy to audit
     for (source_index = 0u; source_index < source_length; source_index++) {
         destination_bytes[*destination_offset + source_index] = source_bytes[source_index];
     }
     *destination_offset += source_length;
+    return PLAINSIGHT_OK;
+}
+
+static plainsight_error plainsight_validate_embedded_name(const uint8_t *name, uint16_t name_len) {
+    size_t name_index = 0u;
+
+    if (name_len == 0u) {
+        return PLAINSIGHT_OK;
+    }
+    if (name == NULL) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
+    if ((name_len == 1u && name[0] == (uint8_t)'.') ||
+        (name_len == 2u && name[0] == (uint8_t)'.' && name[1] == (uint8_t)'.')) {
+        return PLAINSIGHT_ERR_BAD_FORMAT;
+    }
+
+    for (name_index = 0u; name_index < (size_t)name_len; name_index++) {
+        if (name[name_index] == (uint8_t)'/' ||
+            name[name_index] == (uint8_t)'\\' ||
+            name[name_index] == (uint8_t)'\0' ||
+            name[name_index] < 0x20u) {
+            return PLAINSIGHT_ERR_BAD_FORMAT;
+        }
+    }
+
     return PLAINSIGHT_OK;
 }
 
@@ -76,7 +103,7 @@ plainsight_error plainsight_container_pack_inner(const plainsight_inner_header *
         return PLAINSIGHT_ERR_ARGS;
     }
 
-    if (inner->payload_len > PLAINSIGHT_MAX_PAYLOAD_BYTES) {
+    if (inner->payload_len > PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES) {
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
@@ -88,8 +115,13 @@ plainsight_error plainsight_container_pack_inner(const plainsight_inner_header *
     if (inner->name_len > PLAINSIGHT_MAX_FILENAME_BYTES || inner->mime_len > PLAINSIGHT_MAX_MIME_BYTES) {
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
-    if (inner->compression != PLAINSIGHT_COMPRESSION_NONE) {
+    if (inner->compression != PLAINSIGHT_COMPRESSION_NONE && inner->compression != PLAINSIGHT_COMPRESSION_ZSTD) {
         return PLAINSIGHT_ERR_ARGS;
+    }
+
+    result_code = plainsight_validate_embedded_name(inner->name, inner->name_len);
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
     }
 
     if (16u > out_cap) {
@@ -133,6 +165,7 @@ plainsight_error plainsight_container_parse_inner(const uint8_t *in,
     uint16_t mime_len = 0u;
     size_t header_size = 16u;
     size_t total_metadata = 0u;
+    plainsight_error result_code = PLAINSIGHT_OK;
 
     if (in == NULL || inner_view == NULL) {
         return PLAINSIGHT_ERR_ARGS;
@@ -146,7 +179,7 @@ plainsight_error plainsight_container_parse_inner(const uint8_t *in,
     payload_len = plainsight_read_u64_le(in + 0u);
     name_len = plainsight_read_u16_le(in + 8u);
     mime_len = plainsight_read_u16_le(in + 10u);
-    if (in[12] != PLAINSIGHT_COMPRESSION_NONE) {
+    if (in[12] != PLAINSIGHT_COMPRESSION_NONE && in[12] != PLAINSIGHT_COMPRESSION_ZSTD) {
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
     if (in[13] != 0u || in[14] != 0u || in[15] != 0u) {
@@ -170,6 +203,11 @@ plainsight_error plainsight_container_parse_inner(const uint8_t *in,
     // Enforce exact length match so trailing garbage is rejected
     if ((uint64_t)header_size + (uint64_t)total_metadata + payload_len != (uint64_t)in_len) {
         return PLAINSIGHT_ERR_BAD_FORMAT;
+    }
+
+    result_code = plainsight_validate_embedded_name(in + header_size, name_len);
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
     }
 
     // Views point into the original input buffer, no extra copy needed
@@ -201,11 +239,14 @@ plainsight_error plainsight_container_pack_outer(const plainsight_outer_header *
         return PLAINSIGHT_ERR_ARGS;
     }
 
-    if (ciphertext_len == 0u || ciphertext_len > PLAINSIGHT_MAX_CIPHERTEXT_BYTES) {
+    if (ciphertext_len < PLAINSIGHT_CONTAINER_AEAD_TAG_BYTES ||
+        ciphertext_len > PLAINSIGHT_MAX_CIPHERTEXT_BYTES ||
+        outer->ciphertext_len != (uint64_t)ciphertext_len) {
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
-    if (PLAINSIGHT_CONTAINER_OUTER_FIXED_BYTES > out_cap || ciphertext_len > (out_cap - PLAINSIGHT_CONTAINER_OUTER_FIXED_BYTES)) {
+    if (PLAINSIGHT_CONTAINER_OUTER_FIXED_BYTES > out_cap ||
+        ciphertext_len > (out_cap - PLAINSIGHT_CONTAINER_OUTER_FIXED_BYTES)) {
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
@@ -231,15 +272,15 @@ plainsight_error plainsight_container_pack_outer(const plainsight_outer_header *
     plainsight_write_u64_le(out + write_offset, outer->kdf_memlimit);
     write_offset += 8u;
 
-    for (byte_index = 0u; byte_index < 16u; byte_index++) {
+    for (byte_index = 0u; byte_index < PLAINSIGHT_CONTAINER_SALT_BYTES; byte_index++) {
         out[write_offset + byte_index] = outer->salt[byte_index];
     }
-    write_offset += 16u;
+    write_offset += PLAINSIGHT_CONTAINER_SALT_BYTES;
 
-    for (byte_index = 0u; byte_index < 24u; byte_index++) {
+    for (byte_index = 0u; byte_index < PLAINSIGHT_CONTAINER_NONCE_BYTES; byte_index++) {
         out[write_offset + byte_index] = outer->nonce[byte_index];
     }
-    write_offset += 24u;
+    write_offset += PLAINSIGHT_CONTAINER_NONCE_BYTES;
 
     plainsight_write_u64_le(out + write_offset, (uint64_t)ciphertext_len);
     write_offset += 8u;
@@ -254,10 +295,11 @@ plainsight_error plainsight_container_pack_outer(const plainsight_outer_header *
 }
 
 plainsight_error plainsight_container_parse_outer(const uint8_t *in,
-                                  size_t in_len,
-                                  plainsight_outer_header *outer,
-                                  const uint8_t **ciphertext,
-                                  size_t *ciphertext_len) {
+                                                  size_t in_len,
+                                                  plainsight_outer_header *outer,
+                                                  const uint8_t **ciphertext,
+                                                  size_t *ciphertext_len) {
+    plainsight_outer_header parsed_outer = {0};
     size_t byte_index = 0u;
     size_t read_offset = 0u;
     uint64_t encoded_len = 0u;
@@ -270,7 +312,6 @@ plainsight_error plainsight_container_parse_outer(const uint8_t *in,
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 
-    // Reject fast if magic does not match expected container type
     for (byte_index = 0u; byte_index < PLAINSIGHT_CONTAINER_MAGIC_LEN; byte_index++) {
         if (in[read_offset + byte_index] != PLAINSIGHT_CONTAINER_MAGIC[byte_index]) {
             return PLAINSIGHT_ERR_BAD_FORMAT;
@@ -278,10 +319,10 @@ plainsight_error plainsight_container_parse_outer(const uint8_t *in,
     }
     read_offset += PLAINSIGHT_CONTAINER_MAGIC_LEN;
 
-    outer->version = in[read_offset];
+    parsed_outer.version = in[read_offset];
     read_offset += 1u;
 
-    if (outer->version != PLAINSIGHT_CONTAINER_VERSION) {
+    if (parsed_outer.version != PLAINSIGHT_CONTAINER_VERSION) {
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 
@@ -290,30 +331,32 @@ plainsight_error plainsight_container_parse_outer(const uint8_t *in,
     }
     read_offset += 1u;
 
-    outer->kdf_alg = plainsight_read_u16_le(in + read_offset);
+    parsed_outer.kdf_alg = plainsight_read_u16_le(in + read_offset);
     read_offset += 2u;
 
-    outer->kdf_opslimit = plainsight_read_u64_le(in + read_offset);
+    parsed_outer.kdf_opslimit = plainsight_read_u64_le(in + read_offset);
     read_offset += 8u;
 
-    outer->kdf_memlimit = plainsight_read_u64_le(in + read_offset);
+    parsed_outer.kdf_memlimit = plainsight_read_u64_le(in + read_offset);
     read_offset += 8u;
 
-    for (byte_index = 0u; byte_index < 16u; byte_index++) {
-        outer->salt[byte_index] = in[read_offset + byte_index];
+    for (byte_index = 0u; byte_index < PLAINSIGHT_CONTAINER_SALT_BYTES; byte_index++) {
+        parsed_outer.salt[byte_index] = in[read_offset + byte_index];
     }
-    read_offset += 16u;
+    read_offset += PLAINSIGHT_CONTAINER_SALT_BYTES;
 
-    for (byte_index = 0u; byte_index < 24u; byte_index++) {
-        outer->nonce[byte_index] = in[read_offset + byte_index];
+    for (byte_index = 0u; byte_index < PLAINSIGHT_CONTAINER_NONCE_BYTES; byte_index++) {
+        parsed_outer.nonce[byte_index] = in[read_offset + byte_index];
     }
-    read_offset += 24u;
+    read_offset += PLAINSIGHT_CONTAINER_NONCE_BYTES;
 
     encoded_len = plainsight_read_u64_le(in + read_offset);
     read_offset += 8u;
 
-    // Encoded length must fit both configured cap and actual remaining bytes
-    if (encoded_len > (uint64_t)(in_len - read_offset) || encoded_len > PLAINSIGHT_MAX_CIPHERTEXT_BYTES) {
+    if (encoded_len < PLAINSIGHT_CONTAINER_AEAD_TAG_BYTES ||
+        encoded_len > PLAINSIGHT_MAX_CIPHERTEXT_BYTES ||
+        encoded_len > (uint64_t)SIZE_MAX ||
+        encoded_len > (uint64_t)(in_len - read_offset)) {
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 
@@ -321,7 +364,9 @@ plainsight_error plainsight_container_parse_outer(const uint8_t *in,
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 
-    outer->ciphertext_len = encoded_len;
+    parsed_outer.ciphertext_len = encoded_len;
+
+    *outer = parsed_outer;
     *ciphertext = in + read_offset;
     *ciphertext_len = (size_t)encoded_len;
 

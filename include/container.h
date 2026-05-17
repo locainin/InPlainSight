@@ -11,26 +11,52 @@
 extern "C" {
 #endif
 
-// Versioned container constants
+/*
+ * Versioned container constants.
+ *
+ * The outer header is public framing. The inner header is encrypted before it
+ * is placed in the outer container.
+ */
 #define PLAINSIGHT_CONTAINER_VERSION 1u
+#define PLAINSIGHT_COMPRESSION_NONE 0u
+#define PLAINSIGHT_COMPRESSION_ZSTD 1u
+
 #define PLAINSIGHT_CONTAINER_MAGIC_LEN 8u
-#define PLAINSIGHT_CONTAINER_OUTER_FIXED_BYTES 76u
 #define PLAINSIGHT_CONTAINER_AEAD_TAG_BYTES 16u
-#define PLAINSIGHT_MAX_INNER_BYTES (PLAINSIGHT_MAX_PAYLOAD_BYTES + 512u)
-#define PLAINSIGHT_MAX_CIPHERTEXT_BYTES (PLAINSIGHT_MAX_INNER_BYTES + PLAINSIGHT_CONTAINER_AEAD_TAG_BYTES)
-#define PLAINSIGHT_MAX_CONTAINER_BYTES (PLAINSIGHT_CONTAINER_OUTER_FIXED_BYTES + PLAINSIGHT_MAX_CIPHERTEXT_BYTES)
+#define PLAINSIGHT_CONTAINER_SALT_BYTES 16u
+#define PLAINSIGHT_CONTAINER_NONCE_BYTES 24u
+#define PLAINSIGHT_CONTAINER_INNER_FIXED_BYTES 16u
+#define PLAINSIGHT_CONTAINER_OUTER_FIXED_BYTES \
+    (PLAINSIGHT_CONTAINER_MAGIC_LEN + 1u + 1u + 2u + 8u + 8u + \
+     PLAINSIGHT_CONTAINER_SALT_BYTES + PLAINSIGHT_CONTAINER_NONCE_BYTES + 8u)
+
+#define PLAINSIGHT_MAX_INNER_BYTES \
+    (PLAINSIGHT_CONTAINER_INNER_FIXED_BYTES + PLAINSIGHT_MAX_FILENAME_BYTES + \
+     PLAINSIGHT_MAX_MIME_BYTES + PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES)
+
+#define PLAINSIGHT_MAX_CIPHERTEXT_BYTES \
+    (PLAINSIGHT_MAX_INNER_BYTES + PLAINSIGHT_CONTAINER_AEAD_TAG_BYTES)
+
+#define PLAINSIGHT_MAX_CONTAINER_BYTES \
+    (PLAINSIGHT_CONTAINER_OUTER_FIXED_BYTES + PLAINSIGHT_MAX_CIPHERTEXT_BYTES)
 
 typedef struct plainsight_outer_header {
     uint8_t version;
     uint16_t kdf_alg;
     uint64_t kdf_opslimit;
     uint64_t kdf_memlimit;
-    uint8_t salt[16];
-    uint8_t nonce[24];
+    uint8_t salt[PLAINSIGHT_CONTAINER_SALT_BYTES];
+    uint8_t nonce[PLAINSIGHT_CONTAINER_NONCE_BYTES];
     uint64_t ciphertext_len;
 } plainsight_outer_header;
 
-// Inner metadata stays inside encryption so it is not visible in plain bytes
+/*
+ * Inner metadata stays inside encryption so it is not visible in plain bytes.
+ *
+ * name, mime, and payload are borrowed byte views. They are not
+ * NUL-terminated strings. They remain valid only while the input buffer passed
+ * to plainsight_container_parse_inner() remains alive and unchanged.
+ */
 typedef struct plainsight_inner_header {
     uint8_t compression;
     const uint8_t *name;
