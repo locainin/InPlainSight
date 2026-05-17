@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include "../../include/embed/embed.h"
 
 plainsight_error plainsight_embed_payload(plainsight_embed_method method,
@@ -12,9 +15,6 @@ plainsight_error plainsight_embed_payload(plainsight_embed_method method,
         case PLAINSIGHT_EMBED_LSB:
             // LSB mode is the only production path in this build
             return plainsight_embed_lsb_payload(cover, cover_len, cover_channel_stride, payload, payload_len, seed);
-        case PLAINSIGHT_EMBED_SPREAD:
-            // Spread entry point is kept for API stability and future upgrades
-            return plainsight_embed_spread_payload(cover, cover_len, cover_channel_stride, payload, payload_len, seed);
         default:
             // Unknown methods are rejected instead of silently defaulting
             return PLAINSIGHT_ERR_ARGS;
@@ -34,10 +34,6 @@ plainsight_error plainsight_extract_payload(plainsight_embed_method method,
         case PLAINSIGHT_EMBED_LSB:
             // LSB extraction mirrors exact placement and bit ordering from hide
             return plainsight_extract_lsb_payload(
-                cover, cover_len, cover_channel_stride, payload_out, payload_cap, payload_len, seed);
-        case PLAINSIGHT_EMBED_SPREAD:
-            // Spread extraction remains a reserved stub in this release
-            return plainsight_extract_spread_payload(
                 cover, cover_len, cover_channel_stride, payload_out, payload_cap, payload_len, seed);
         default:
             return PLAINSIGHT_ERR_ARGS;

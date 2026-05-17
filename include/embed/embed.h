@@ -13,7 +13,6 @@ extern "C" {
 // Embedding modes kept explicit for forward compatibility
 typedef enum plainsight_embed_method {
     PLAINSIGHT_EMBED_LSB = 0,
-    PLAINSIGHT_EMBED_SPREAD = 1,
     PLAINSIGHT_EMBED_INVALID = 255
 } plainsight_embed_method;
 
@@ -52,22 +51,6 @@ plainsight_error plainsight_extract_lsb_payload(const uint8_t *cover,
                                 size_t payload_cap,
                                 size_t *payload_len,
                                 const uint8_t seed[32]);
-
-// Placeholder for a future spread-spectrum backend
-plainsight_error plainsight_embed_spread_payload(uint8_t *cover,
-                                 size_t cover_len,
-                                 uint8_t cover_channel_stride,
-                                 const uint8_t *payload,
-                                 size_t payload_len,
-                                 const uint8_t seed[32]);
-
-plainsight_error plainsight_extract_spread_payload(const uint8_t *cover,
-                                   size_t cover_len,
-                                   uint8_t cover_channel_stride,
-                                   uint8_t *payload_out,
-                                   size_t payload_cap,
-                                   size_t *payload_len,
-                                   const uint8_t seed[32]);
 
 #ifdef __cplusplus
 }

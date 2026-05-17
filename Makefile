@@ -32,7 +32,6 @@ APP_SRCS := \
 	src/crypto.c \
 	src/embed/embed.c \
 	src/embed/embed_lsb.c \
-	src/embed/embed_spread.c \
 	src/split/outer_v2.c \
 	src/split/manifest.c \
 	src/split/plan.c \
@@ -197,7 +196,7 @@ $(BUILD_DIR)/gcc/sanitize/tests/test_crypto_kat: $(BUILD_DIR)/gcc/sanitize/tests
 	@mkdir -p $(dir $@)
 	$(GCC) $(SAN_LDFLAGS) -o $@ $^ $(SODIUM_LIBS)
 
-$(BUILD_DIR)/gcc/sanitize/tests/test_roundtrip: $(BUILD_DIR)/gcc/sanitize/tests/test_roundtrip.o $(patsubst %.c,$(BUILD_DIR)/gcc/sanitize/%.o,src/error.c src/container.c src/crypto.c src/embed/embed.c src/embed/embed_lsb.c src/embed/embed_spread.c)
+$(BUILD_DIR)/gcc/sanitize/tests/test_roundtrip: $(BUILD_DIR)/gcc/sanitize/tests/test_roundtrip.o $(patsubst %.c,$(BUILD_DIR)/gcc/sanitize/%.o,src/error.c src/container.c src/crypto.c src/embed/embed.c src/embed/embed_lsb.c)
 	@mkdir -p $(dir $@)
 	$(GCC) $(SAN_LDFLAGS) -o $@ $^ $(SODIUM_LIBS)
 
@@ -241,7 +240,7 @@ $(BUILD_DIR)/clang/sanitize/tests/test_crypto_kat: $(BUILD_DIR)/clang/sanitize/t
 	@mkdir -p $(dir $@)
 	$(CLANG) $(SAN_LDFLAGS) -o $@ $^ $(SODIUM_LIBS)
 
-$(BUILD_DIR)/clang/sanitize/tests/test_roundtrip: $(BUILD_DIR)/clang/sanitize/tests/test_roundtrip.o $(patsubst %.c,$(BUILD_DIR)/clang/sanitize/%.o,src/error.c src/container.c src/crypto.c src/embed/embed.c src/embed/embed_lsb.c src/embed/embed_spread.c)
+$(BUILD_DIR)/clang/sanitize/tests/test_roundtrip: $(BUILD_DIR)/clang/sanitize/tests/test_roundtrip.o $(patsubst %.c,$(BUILD_DIR)/clang/sanitize/%.o,src/error.c src/container.c src/crypto.c src/embed/embed.c src/embed/embed_lsb.c)
 	@mkdir -p $(dir $@)
 	$(CLANG) $(SAN_LDFLAGS) -o $@ $^ $(SODIUM_LIBS)
 
