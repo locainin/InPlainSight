@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stddef.h>
@@ -10,6 +13,10 @@
 
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
+#endif
+
+#ifndef O_NOFOLLOW
+#define O_NOFOLLOW 0
 #endif
 
 static plainsight_error plainsight_read_exact_limit(int file_descriptor,
@@ -79,17 +86,19 @@ plainsight_error plainsight_io_read_file(const char *path, uint8_t *out, size_t 
         goto cleanup;
     }
 
-    if (S_ISREG(file_metadata.st_mode)) {
-        if (file_metadata.st_size < 0) {
-            result_code = PLAINSIGHT_ERR_IO;
-            goto cleanup;
-        }
+    if (!S_ISREG(file_metadata.st_mode)) {
+        result_code = PLAINSIGHT_ERR_UNSUPPORTED;
+        goto cleanup;
+    }
 
-        // Regular files can be pre-checked with st_size for fast oversize rejection
-        if ((uint64_t)file_metadata.st_size > (uint64_t)out_cap) {
-            result_code = PLAINSIGHT_ERR_TOO_LARGE;
-            goto cleanup;
-        }
+    if (file_metadata.st_size < 0) {
+        result_code = PLAINSIGHT_ERR_IO;
+        goto cleanup;
+    }
+
+    if ((uint64_t)file_metadata.st_size > (uint64_t)out_cap) {
+        result_code = PLAINSIGHT_ERR_TOO_LARGE;
+        goto cleanup;
     }
 
     result_code = plainsight_read_exact_limit(file_descriptor, out, out_cap, out_len);
@@ -128,8 +137,9 @@ plainsight_error plainsight_io_write_file(const char *path, const uint8_t *data,
         return PLAINSIGHT_ERR_ARGS;
     }
 
-    // 0600 keeps extracted payload private by default
-    file_descriptor = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+    // 0600 keeps extracted payload private by default.
+    // O_EXCL avoids accidental overwrite. O_NOFOLLOW avoids symlink clobbering on platforms that support it.
+    file_descriptor = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (file_descriptor < 0) {
         return PLAINSIGHT_ERR_IO;
     }

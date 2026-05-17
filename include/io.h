@@ -14,7 +14,9 @@ extern "C" {
 #define PLAINSIGHT_MAX_PASSPHRASE_BYTES 256u
 #define PLAINSIGHT_MAX_FILENAME_BYTES 128u
 #define PLAINSIGHT_MAX_MIME_BYTES 96u
-#define PLAINSIGHT_MAX_PAYLOAD_BYTES (8u * 1024u * 1024u)
+#define PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES (8u * 1024u * 1024u)
+#define PLAINSIGHT_MAX_SHARD_PLAINTEXT_BYTES (8u * 1024u * 1024u)
+#define PLAINSIGHT_MAX_PAYLOAD_BYTES PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES
 
 // Reads a file into caller-provided storage with strict size checks
 plainsight_error plainsight_io_read_file(const char *path, uint8_t *out, size_t out_cap, size_t *out_len);
