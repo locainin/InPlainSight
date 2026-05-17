@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -136,7 +139,7 @@ plainsight_error plainsight_info_build_report(const plainsight_image *image,
     report->density_per_mille = density_per_mille;
     // Per-shard payload is capped by both cover math and hard project bounds
     report->max_payload_per_shard_bytes =
-        plainsight_info_min_u64(report->capacity.max_payload_by_cover_bytes, (uint64_t)PLAINSIGHT_MAX_PAYLOAD_BYTES);
+        plainsight_info_min_u64(report->capacity.max_payload_by_cover_bytes, (uint64_t)PLAINSIGHT_MAX_SHARD_PLAINTEXT_BYTES);
     report->max_total_payload_bytes = (uint64_t)PLAINSIGHT_MAX_TOTAL_PAYLOAD_BYTES;
     report->max_image_bytes = (uint64_t)PLAINSIGHT_MAX_IMAGE_BYTES;
     report->payload_provided = payload_provided;
@@ -227,7 +230,7 @@ plainsight_error plainsight_info_write_json_stdout(const plainsight_info_report 
     (void)fputs(",\"max_image_bytes\":", stdout);
     plainsight_info_write_u64_stdout(report->max_image_bytes);
     (void)fputs(",\"max_payload_bytes\":", stdout);
-    plainsight_info_write_u64_stdout((uint64_t)PLAINSIGHT_MAX_PAYLOAD_BYTES);
+    plainsight_info_write_u64_stdout((uint64_t)PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES);
     (void)fputs("},\"computed\":{", stdout);
     (void)fputs("\"usable_cover_bytes\":", stdout);
     plainsight_info_write_u64_stdout(report->capacity.usable_cover_bytes);

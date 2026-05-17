@@ -1,5 +1,9 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -26,9 +30,55 @@
 // - bounded reads from the payload file descriptor
 // The orchestrator stays in this file so the high-level flow is easy to audit
 
+static void plainsight_cli_split_write_u64_stderr(uint64_t value) {
+    uint8_t reversed_digits[32];
+    size_t digit_count = 0u;
+    size_t output_index = 0u;
+
+    if (value == 0u) {
+        (void)fputc('0', stderr);
+        return;
+    }
+
+    // Digits are staged in reverse so decimal output avoids locale-sensitive formatting
+    while (value > 0u && digit_count < sizeof(reversed_digits)) {
+        reversed_digits[digit_count] = (uint8_t)('0' + (uint8_t)(value % 10u));
+        value /= 10u;
+        digit_count++;
+    }
+    while (output_index < digit_count) {
+        size_t reverse_index = digit_count - 1u - output_index;
+        (void)fputc((int)reversed_digits[reverse_index], stderr);
+        output_index++;
+    }
+}
+
+static void plainsight_cli_split_log_preflight(const plainsight_info_report *report,
+                               const char *template_text,
+                               uint64_t payload_file_size) {
+    if (report == NULL || template_text == NULL) {
+        return;
+    }
+
+    (void)fputs("hide preflight report\n", stderr);
+    (void)fputs("  plan: split\n", stderr);
+    (void)fputs("  payload bytes: ", stderr);
+    plainsight_cli_split_write_u64_stderr(payload_file_size);
+    (void)fputc('\n', stderr);
+    (void)fputs("  max payload per shard: ", stderr);
+    plainsight_cli_split_write_u64_stderr(report->max_payload_per_shard_bytes);
+    (void)fputc('\n', stderr);
+    (void)fputs("  required shards: ", stderr);
+    plainsight_cli_split_write_u64_stderr(report->required_shards);
+    (void)fputc('\n', stderr);
+    (void)fputs("  resolved output template: ", stderr);
+    (void)fputs(template_text, stderr);
+    (void)fputc('\n', stderr);
+}
+
 plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *options) {
     plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
-    plainsight_error passphrase_lock_result = PLAINSIGHT_OK;
+    plainsight_error passphrase_lock_result = PLAINSIGHT_ERR_INTERNAL;
     int output_is_directory = 0;
     int payload_file_descriptor = -1;
     uint64_t payload_file_size = 0u;
@@ -37,6 +87,7 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
     uint32_t shards_written = 0u;
     plainsight_capacity_input capacity_input;
     plainsight_capacity_report capacity_report;
+    plainsight_info_report info_report;
     uint64_t per_shard_capacity = 0u;
     plainsight_split_plan split_plan;
     uint8_t set_id[PLAINSIGHT_SPLIT_SET_ID_BYTES];
@@ -67,6 +118,9 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
         options->passphrase_path == NULL) {
         return PLAINSIGHT_ERR_ARGS;
     }
+    if (options->compression_mode != PLAINSIGHT_COMPRESSION_NONE) {
+        return PLAINSIGHT_ERR_UNSUPPORTED;
+    }
 
     result_code = plainsight_cli_path_is_directory(options->output_dir, &output_is_directory);
     if (result_code != PLAINSIGHT_OK) {
@@ -75,17 +129,6 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
     if (output_is_directory == 0) {
         return PLAINSIGHT_ERR_ARGS;
     }
-
-    // Passphrase bytes are treated as raw bytes and are not NUL-terminated
-    // This keeps passphrases compatible with binary UI input paths
-    result_code = plainsight_io_read_passphrase_file(options->passphrase_path,
-                                             g_cli_workspace.passphrase,
-                                             sizeof(g_cli_workspace.passphrase),
-                                             &passphrase_length);
-    if (result_code != PLAINSIGHT_OK) {
-        return result_code;
-    }
-    passphrase_lock_result = plainsight_secure_lock(g_cli_workspace.passphrase, passphrase_length);
 
     // Payload size must be known up front for split planning
     // This prevents partial sets when the payload is longer than expected
@@ -129,8 +172,8 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
     // Per-shard capacity is clamped by the global per-shard payload cap
     // The embedding layer can store more bits, but workspace buffers are fixed in size
     per_shard_capacity = capacity_report.max_payload_by_cover_bytes;
-    if (per_shard_capacity > (uint64_t)PLAINSIGHT_MAX_PAYLOAD_BYTES) {
-        per_shard_capacity = (uint64_t)PLAINSIGHT_MAX_PAYLOAD_BYTES;
+    if (per_shard_capacity > (uint64_t)PLAINSIGHT_MAX_SHARD_PLAINTEXT_BYTES) {
+        per_shard_capacity = (uint64_t)PLAINSIGHT_MAX_SHARD_PLAINTEXT_BYTES;
     }
     if (per_shard_capacity == 0u) {
         result_code = PLAINSIGHT_ERR_CAPACITY;
@@ -168,6 +211,31 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
     if (result_code != PLAINSIGHT_OK) {
         goto cleanup;
     }
+
+    result_code = plainsight_info_build_report(&g_cli_workspace.image,
+                                       plainsight_image_detect_format_from_path(options->cover_path),
+                                       1u,
+                                       1000u,
+                                       payload_name_length,
+                                       PLAINSIGHT_MIME_OCTET_STREAM_LEN,
+                                       1,
+                                       payload_file_size,
+                                       &info_report);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+    plainsight_cli_split_log_preflight(&info_report, template_text, payload_file_size);
+
+    // Passphrase bytes are treated as raw bytes and are not NUL-terminated
+    // This keeps passphrases compatible with binary UI input paths
+    result_code = plainsight_io_read_passphrase_file(options->passphrase_path,
+                                             g_cli_workspace.passphrase,
+                                             sizeof(g_cli_workspace.passphrase),
+                                             &passphrase_length);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+    passphrase_lock_result = plainsight_secure_lock(g_cli_workspace.passphrase, passphrase_length);
 
     // Derive embedding seed once from the cover bytes
     // Seed stays stable after embedding because it hashes the cover with LSB masked out

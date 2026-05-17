@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -24,8 +27,8 @@ static const char *plainsight_cli_info_limiting_factor(const plainsight_info_rep
     if (report->required_shards > PLAINSIGHT_MAX_SHARDS) {
         return "shard_count_cap";
     }
-    if (report->max_payload_per_shard_bytes == (uint64_t)PLAINSIGHT_MAX_PAYLOAD_BYTES &&
-        report->capacity.max_payload_by_cover_bytes >= (uint64_t)PLAINSIGHT_MAX_PAYLOAD_BYTES) {
+    if (report->max_payload_per_shard_bytes == (uint64_t)PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES &&
+        report->capacity.max_payload_by_cover_bytes >= (uint64_t)PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES) {
         return "project_payload_cap";
     }
     return "cover_capacity";

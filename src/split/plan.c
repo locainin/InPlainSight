@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -53,7 +56,7 @@ plainsight_error plainsight_split_plan_compute(uint64_t payload_bytes,
         // No shard can store any payload bytes in this configuration
         return PLAINSIGHT_ERR_CAPACITY;
     }
-    if (per_shard_plain_capacity > (uint64_t)PLAINSIGHT_MAX_PAYLOAD_BYTES) {
+    if (per_shard_plain_capacity > (uint64_t)PLAINSIGHT_MAX_SHARD_PLAINTEXT_BYTES) {
         // This caller contract keeps lengths compatible with fixed workspace buffers
         return PLAINSIGHT_ERR_ARGS;
     }

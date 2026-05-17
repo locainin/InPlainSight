@@ -6,6 +6,7 @@
 
 #include <sodium.h>
 
+#include "../../include/compress.h"
 #include "../../include/container.h"
 #include "../../include/crypto.h"
 #include "../../include/embed/embed.h"
@@ -22,6 +23,8 @@
 #include "../../include/securemem.h"
 #include "../../include/cli/cli_split_helpers.h"
 
+#define PLAINSIGHT_CLI_COMPRESSION_AUTO 2u
+
 typedef struct plainsight_hide_options {
     // Cover path used as carrier image
     const char *cover_path;
@@ -37,6 +40,8 @@ typedef struct plainsight_hide_options {
     const char *passphrase_path;
     // Selected embed backend
     plainsight_embed_method method;
+    // Payload compression mode for single-image hide
+    uint8_t compression_mode;
     // Enables split planning and shard output mode
     int split_auto;
 } plainsight_hide_options;
@@ -78,7 +83,7 @@ typedef struct plainsight_workspace {
     // Decoded image view over image_pixels
     plainsight_image image;
     // Plain payload bytes loaded from disk
-    uint8_t payload[PLAINSIGHT_MAX_PAYLOAD_BYTES];
+    uint8_t payload[PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES];
     // Inner authenticated plaintext container
     uint8_t inner[PLAINSIGHT_MAX_INNER_BYTES];
     // Encrypted bytes before outer packing
