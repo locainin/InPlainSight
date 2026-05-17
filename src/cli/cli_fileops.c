@@ -1,8 +1,13 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <stdio.h>
 #include <unistd.h>
 
 #include "cli_internal.h"
@@ -10,6 +15,21 @@
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
 #endif
+
+#ifndef SSIZE_MAX
+#define SSIZE_MAX ((ssize_t)(SIZE_MAX / 2u))
+#endif
+
+static size_t plainsight_cli_syscall_chunk_size(size_t remaining) {
+    const size_t max_chunk = (size_t)SSIZE_MAX;
+
+    // POSIX read/write take size_t but return ssize_t
+    // Keeping requests under SSIZE_MAX avoids implementation-defined edge cases
+    if (remaining > max_chunk) {
+        return max_chunk;
+    }
+    return remaining;
+}
 
 plainsight_error plainsight_cli_read_exact_bytes(int file_descriptor,
                                  uint8_t *out,
@@ -24,7 +44,8 @@ plainsight_error plainsight_cli_read_exact_bytes(int file_descriptor,
     // The API contract is "read exactly N bytes"
     // This is used for split mode where chunk sizes are planned up front
     while (total_read < to_read) {
-        ssize_t read_now = read(file_descriptor, out + total_read, to_read - total_read);
+        size_t chunk_size = plainsight_cli_syscall_chunk_size(to_read - total_read);
+        ssize_t read_now = read(file_descriptor, out + total_read, chunk_size);
         if (read_now > 0) {
             total_read += (size_t)read_now;
             continue;
@@ -54,7 +75,8 @@ plainsight_error plainsight_cli_write_all_fd(int file_descriptor, const uint8_t 
     // Loop until all bytes are written or an error occurs
     // write can return short counts even for regular files in some cases
     while (written_total < data_len) {
-        ssize_t written_now = write(file_descriptor, data + written_total, data_len - written_total);
+        size_t chunk_size = plainsight_cli_syscall_chunk_size(data_len - written_total);
+        ssize_t written_now = write(file_descriptor, data + written_total, chunk_size);
         if (written_now > 0) {
             written_total += (size_t)written_now;
             continue;
@@ -64,6 +86,28 @@ plainsight_error plainsight_cli_write_all_fd(int file_descriptor, const uint8_t 
             continue;
         }
         return PLAINSIGHT_ERR_IO;
+    }
+
+    return PLAINSIGHT_OK;
+}
+
+plainsight_error plainsight_cli_commit_temp_output_exclusive(const char *temp_path, const char *final_path) {
+    if (temp_path == NULL || final_path == NULL) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
+    // link is the atomic "create final only if it does not exist" operation
+    // This closes the stat-then-rename race that could overwrite another writer's file
+    if (link(temp_path, final_path) != 0) {
+        return PLAINSIGHT_ERR_IO;
+    }
+
+    // The final path is now durable as a directory entry
+    // Removing the temp name is cleanup only and must not turn a committed write into data loss
+    if (unlink(temp_path) != 0) {
+        (void)fputs("temporary output cleanup failed: ", stderr);
+        (void)fputs(temp_path, stderr);
+        (void)fputc('\n', stderr);
     }
 
     return PLAINSIGHT_OK;
@@ -116,4 +160,3 @@ plainsight_error plainsight_cli_open_temp_output_exclusive(const char *final_pat
 
     return PLAINSIGHT_OK;
 }
-

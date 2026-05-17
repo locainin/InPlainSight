@@ -1,8 +1,12 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -173,9 +177,15 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
 
     // Refuse overwrite so callers can safely use atomic writes without clobbering existing outputs
     if (plainsight_cli_path_exists(final_path, &final_exists) != PLAINSIGHT_OK) {
+        (void)fputs("output path check failed: ", stderr);
+        (void)fputs(final_path, stderr);
+        (void)fputc('\n', stderr);
         return PLAINSIGHT_ERR_IO;
     }
     if (final_exists != 0) {
+        (void)fputs("output path already exists: ", stderr);
+        (void)fputs(final_path, stderr);
+        (void)fputc('\n', stderr);
         return PLAINSIGHT_ERR_IO;
     }
 
@@ -296,6 +306,9 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
 
         // Existence probe keeps the temp path collision-free without relying on a fixed name
         if (plainsight_cli_path_exists(temp_path, &temp_exists) != PLAINSIGHT_OK) {
+            (void)fputs("temporary output path check failed: ", stderr);
+            (void)fputs(temp_path, stderr);
+            (void)fputc('\n', stderr);
             return PLAINSIGHT_ERR_IO;
         }
         if (temp_exists == 0) {
@@ -311,15 +324,22 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
     // rename is used at the end to make the final path appear in one step
     result_code = plainsight_cli_store_image(temp_path, image);
     if (result_code != PLAINSIGHT_OK) {
+        (void)fputs("temporary image write failed: ", stderr);
+        (void)fputs(temp_path, stderr);
+        (void)fputc('\n', stderr);
         (void)unlink(temp_path);
         return result_code;
     }
 
-    if (rename(temp_path, final_path) != 0) {
-        // rename failure can happen on permission issues or cross-device edge cases
-        // temp file is removed so retries do not accumulate junk files
+    result_code = plainsight_cli_commit_temp_output_exclusive(temp_path, final_path);
+    if (result_code != PLAINSIGHT_OK) {
+        // link failure can happen on permission issues or if another writer won the race
+        // temp file is removed so retries do not accumulate partial outputs
+        (void)fputs("output commit failed: ", stderr);
+        (void)fputs(strerror(errno), stderr);
+        (void)fputc('\n', stderr);
         (void)unlink(temp_path);
-        return PLAINSIGHT_ERR_IO;
+        return result_code;
     }
 
     return PLAINSIGHT_OK;

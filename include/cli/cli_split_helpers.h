@@ -46,12 +46,15 @@ plainsight_error plainsight_cli_split_format_shard_filename(const char *template
 // This helps keep split output best-effort atomic by failing before any writes
 plainsight_error plainsight_cli_split_preflight_outputs(const char *output_dir, const char *template_text, uint32_t shard_count);
 
+// Links a fully written temp file into final_path without overwriting existing files
+// The temp path is unlinked on successful commit as a best-effort cleanup
+plainsight_error plainsight_cli_commit_temp_output_exclusive(const char *temp_path, const char *final_path);
+
 // Extracts the embedded container bytes from one stego image, then parses split outer v2
 // This returns ciphertext as a pointer into container_out, so container_out must remain valid
 plainsight_error plainsight_cli_split_extract_one_shard(const char *path,
                                         plainsight_embed_method method,
-                                        const uint8_t *passphrase,
-                                        size_t passphrase_len,
+                                        const uint8_t stego_subkey[32],
                                         uint8_t *container_out,
                                         size_t container_cap,
                                         size_t *container_len_out,
