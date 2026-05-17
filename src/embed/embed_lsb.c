@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 #include <limits.h>
@@ -6,6 +9,9 @@
 
 #define PLAINSIGHT_LSB_PREFIX_BITS 64u
 #define PLAINSIGHT_LSB_SEED_DOMAIN_MIN 1u
+
+// LSB embedding uses keyed placement plus a stable texture preference
+// The placement must be identical before and after embedding, so all scores ignore the bit being written
 
 // Seed bytes drive a deterministic threshold so hide and extract use the same slots
 static uint16_t plainsight_lsb_texture_threshold(const uint8_t seed_bytes[32]) {
@@ -22,6 +28,35 @@ static uint64_t plainsight_lsb_read_seed_u64(const uint8_t seed_bytes[32], size_
     }
 
     return seed_value;
+}
+
+static uint64_t plainsight_lsb_rotate_left_u64(uint64_t value, unsigned int shift_count) {
+    unsigned int normalized_shift = shift_count & 63u;
+
+    if (normalized_shift == 0u) {
+        return value;
+    }
+    return (value << normalized_shift) | (value >> (64u - normalized_shift));
+}
+
+static uint64_t plainsight_lsb_mix_seed_u64(const uint8_t seed_bytes[32],
+                                    uint64_t domain_size,
+                                    uint8_t domain_label) {
+    uint64_t lane0 = plainsight_lsb_read_seed_u64(seed_bytes, 0u);
+    uint64_t lane1 = plainsight_lsb_read_seed_u64(seed_bytes, 8u);
+    uint64_t lane2 = plainsight_lsb_read_seed_u64(seed_bytes, 16u);
+    uint64_t lane3 = plainsight_lsb_read_seed_u64(seed_bytes, 24u);
+    uint64_t mixed_value = 0u;
+
+    // All four seed lanes are folded into both permutation values
+    // The labels keep step and bias from becoming the same value on repeated inputs
+    mixed_value = lane0;
+    mixed_value ^= plainsight_lsb_rotate_left_u64(lane1, 17u);
+    mixed_value ^= plainsight_lsb_rotate_left_u64(lane2, 31u);
+    mixed_value ^= plainsight_lsb_rotate_left_u64(lane3, 47u);
+    mixed_value ^= (uint64_t)domain_label * UINT64_C(0x9E3779B97F4A7C15);
+
+    return mixed_value % domain_size;
 }
 
 static uint64_t plainsight_lsb_greatest_common_divisor(uint64_t first_value, uint64_t second_value) {
@@ -47,7 +82,7 @@ static plainsight_error plainsight_lsb_compute_permutation(const uint8_t seed_by
         return PLAINSIGHT_ERR_ARGS;
     }
 
-    permutation_step = plainsight_lsb_read_seed_u64(seed_bytes, 0u) % domain_size;
+    permutation_step = plainsight_lsb_mix_seed_u64(seed_bytes, domain_size, 0xA5u);
     if (permutation_step == 0u) {
         permutation_step = 1u;
     }
@@ -60,17 +95,26 @@ static plainsight_error plainsight_lsb_compute_permutation(const uint8_t seed_by
         }
     }
 
-    permutation_bias = plainsight_lsb_read_seed_u64(seed_bytes, 8u) % domain_size;
+    permutation_bias = plainsight_lsb_mix_seed_u64(seed_bytes, domain_size, 0x5Au);
     *step_out = permutation_step;
     *bias_out = permutation_bias;
     return PLAINSIGHT_OK;
 }
 
-static uint64_t plainsight_lsb_permute_index(uint64_t linear_index,
-                                     uint64_t permutation_step,
-                                     uint64_t permutation_bias,
-                                     uint64_t domain_size) {
-    return (permutation_step * linear_index + permutation_bias) % domain_size;
+static uint64_t plainsight_lsb_advance_permutation(uint64_t current_index,
+                                           uint64_t permutation_step,
+                                           uint64_t domain_size) {
+    uint64_t wrap_threshold = domain_size - permutation_step;
+
+    // permutation_step is always in 1..domain_size-1 except the single-slot case
+    // The subtraction form avoids multiplication and modulo in the pixel loop
+    if (permutation_step == domain_size) {
+        return 0u;
+    }
+    if (current_index >= wrap_threshold) {
+        return current_index - wrap_threshold;
+    }
+    return current_index + permutation_step;
 }
 
 static uint8_t plainsight_lsb_abs_difference(uint8_t first_value, uint8_t second_value) {
@@ -196,19 +240,20 @@ plainsight_error plainsight_embed_lsb_payload(uint8_t *cover,
     }
 
     for (phase_index = 0u; phase_index < 2u && embedded_bit_count < required_bit_count; phase_index++) {
+        uint64_t cover_index = permutation_bias;
+
         for (permutation_index = 0u;
              permutation_index < (uint64_t)cover_len && embedded_bit_count < required_bit_count;
              permutation_index++) {
-            uint64_t cover_index = plainsight_lsb_permute_index(permutation_index,
-                                                        permutation_step,
-                                                        permutation_bias,
-                                                        (uint64_t)cover_len);
+            uint64_t selected_cover_index = cover_index;
             int slot_is_high_texture = plainsight_lsb_slot_is_usable(cover,
                                                              cover_len,
-                                                             cover_index,
+                                                             selected_cover_index,
                                                              cover_channel_stride,
                                                              minimum_texture_score);
             uint8_t bit_to_embed = 0u;
+
+            cover_index = plainsight_lsb_advance_permutation(cover_index, permutation_step, (uint64_t)cover_len);
 
             // Phase 0 consumes textured slots first, phase 1 consumes the rest
             if (!plainsight_lsb_slot_matches_phase(phase_index, slot_is_high_texture)) {
@@ -222,7 +267,7 @@ plainsight_error plainsight_embed_lsb_payload(uint8_t *cover,
             }
 
             // Least significant bit (LSB) stores one message bit per cover byte
-            cover[cover_index] = (uint8_t)((cover[cover_index] & 0xFEu) | bit_to_embed);
+            cover[selected_cover_index] = (uint8_t)((cover[selected_cover_index] & 0xFEu) | bit_to_embed);
             embedded_bit_count++;
         }
     }
@@ -274,26 +319,27 @@ plainsight_error plainsight_extract_lsb_payload(const uint8_t *cover,
 
     // First pass reads the 64-bit encoded payload length prefix
     for (phase_index = 0u; phase_index < 2u && observed_slot_count < PLAINSIGHT_LSB_PREFIX_BITS; phase_index++) {
+        uint64_t cover_index = permutation_bias;
+
         for (permutation_index = 0u;
              permutation_index < (uint64_t)cover_len && observed_slot_count < PLAINSIGHT_LSB_PREFIX_BITS;
              permutation_index++) {
-            uint64_t cover_index = plainsight_lsb_permute_index(permutation_index,
-                                                        permutation_step,
-                                                        permutation_bias,
-                                                        (uint64_t)cover_len);
+            uint64_t selected_cover_index = cover_index;
             int slot_is_high_texture = plainsight_lsb_slot_is_usable(cover,
                                                              cover_len,
-                                                             cover_index,
+                                                             selected_cover_index,
                                                              cover_channel_stride,
                                                              minimum_texture_score);
             uint8_t embedded_bit = 0u;
+
+            cover_index = plainsight_lsb_advance_permutation(cover_index, permutation_step, (uint64_t)cover_len);
 
             if (!plainsight_lsb_slot_matches_phase(phase_index, slot_is_high_texture)) {
                 continue;
             }
 
             // Read one LSB from the selected cover slot
-            embedded_bit = (uint8_t)(cover[cover_index] & 1u);
+            embedded_bit = (uint8_t)(cover[selected_cover_index] & 1u);
             encoded_payload_length |= ((uint64_t)embedded_bit) << observed_slot_count;
             observed_slot_count++;
         }
@@ -318,25 +364,26 @@ plainsight_error plainsight_extract_lsb_payload(const uint8_t *cover,
     // Second pass rebuilds payload bytes using the same two-phase slot ordering
     observed_slot_count = 0u;
     for (phase_index = 0u; phase_index < 2u && observed_slot_count < required_bit_count; phase_index++) {
+        uint64_t cover_index = permutation_bias;
+
         for (permutation_index = 0u;
              permutation_index < (uint64_t)cover_len && observed_slot_count < required_bit_count;
              permutation_index++) {
-            uint64_t cover_index = plainsight_lsb_permute_index(permutation_index,
-                                                        permutation_step,
-                                                        permutation_bias,
-                                                        (uint64_t)cover_len);
+            uint64_t selected_cover_index = cover_index;
             int slot_is_high_texture = plainsight_lsb_slot_is_usable(cover,
                                                              cover_len,
-                                                             cover_index,
+                                                             selected_cover_index,
                                                              cover_channel_stride,
                                                              minimum_texture_score);
             uint8_t embedded_bit = 0u;
+
+            cover_index = plainsight_lsb_advance_permutation(cover_index, permutation_step, (uint64_t)cover_len);
 
             if (!plainsight_lsb_slot_matches_phase(phase_index, slot_is_high_texture)) {
                 continue;
             }
 
-            embedded_bit = (uint8_t)(cover[cover_index] & 1u);
+            embedded_bit = (uint8_t)(cover[selected_cover_index] & 1u);
             if (observed_slot_count >= PLAINSIGHT_LSB_PREFIX_BITS) {
                 uint64_t payload_bit_index = observed_slot_count - PLAINSIGHT_LSB_PREFIX_BITS;
                 plainsight_lsb_write_payload_bit(payload_out, payload_bit_index, embedded_bit);
