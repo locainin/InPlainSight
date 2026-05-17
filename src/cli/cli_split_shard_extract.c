@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -7,8 +10,7 @@
 
 plainsight_error plainsight_cli_split_extract_one_shard(const char *path,
                                         plainsight_embed_method method,
-                                        const uint8_t *passphrase,
-                                        size_t passphrase_len,
+                                        const uint8_t stego_subkey[PLAINSIGHT_STEGO_SUBKEY_BYTES],
                                         uint8_t *container_out,
                                         size_t container_cap,
                                         size_t *container_len_out,
@@ -19,7 +21,7 @@ plainsight_error plainsight_cli_split_extract_one_shard(const char *path,
     uint8_t embed_seed[32];
     size_t container_len = 0u;
 
-    if (path == NULL || passphrase == NULL || container_out == NULL || container_len_out == NULL ||
+    if (path == NULL || stego_subkey == NULL || container_out == NULL || container_len_out == NULL ||
         outer_out == NULL || ciphertext_out == NULL || ciphertext_len_out == NULL) {
         return PLAINSIGHT_ERR_ARGS;
     }
@@ -33,11 +35,10 @@ plainsight_error plainsight_cli_split_extract_one_shard(const char *path,
 
     // Seed derivation masks out LSBs so it stays stable between cover and stego outputs
     // This allows outer header extraction without knowing the encryption salt in advance
-    result_code = plainsight_crypto_seed_from_passphrase_and_cover(passphrase,
-                                                           passphrase_len,
-                                                           g_cli_workspace.image.pixels,
-                                                           g_cli_workspace.image.data_len,
-                                                           embed_seed);
+    result_code = plainsight_crypto_seed_from_subkey_and_cover(stego_subkey,
+                                                       g_cli_workspace.image.pixels,
+                                                       g_cli_workspace.image.data_len,
+                                                       embed_seed);
     if (result_code != PLAINSIGHT_OK) {
         plainsight_secure_zero(embed_seed, sizeof(embed_seed));
         return PLAINSIGHT_ERR_AUTH;
@@ -71,4 +72,3 @@ plainsight_error plainsight_cli_split_extract_one_shard(const char *path,
     *container_len_out = container_len;
     return PLAINSIGHT_OK;
 }
-
