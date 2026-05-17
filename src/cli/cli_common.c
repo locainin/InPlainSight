@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stdio.h>
 #include <string.h>
 
@@ -31,7 +34,7 @@ void plainsight_cli_print_usage(const char *program_path) {
     (void)fputs("usage:\n", stderr);
     (void)fputs("  ", stderr);
     (void)fputs(program_name, stderr);
-    (void)fputs(" hide --cover <file> --payload <file> --output <file> --passphrase-file <file> [--method lsb]\n",
+    (void)fputs(" hide --cover <file> --payload <file> --output <file> --passphrase-file <file> [--method lsb] [--compress none|auto|zstd]\n",
                 stderr);
     (void)fputs("  ", stderr);
     (void)fputs(program_name, stderr);
@@ -43,7 +46,7 @@ void plainsight_cli_print_usage(const char *program_path) {
     (void)fputs(" extract --input <file> --output <file> --passphrase-file <file> [--method lsb]\n", stderr);
     (void)fputs("  ", stderr);
     (void)fputs(program_name, stderr);
-    (void)fputs(" extract --input-dir <dir> --output <file> --passphrase-file <file> [--method lsb]\n", stderr);
+    (void)fputs(" extract --input-dir <dir> --output <file-or-dir> --passphrase-file <file> [--method lsb]\n", stderr);
     (void)fputs("  ", stderr);
     (void)fputs(program_name, stderr);
     (void)fputs(
@@ -65,12 +68,6 @@ plainsight_embed_method plainsight_cli_parse_method(const char *method_text, pla
     if (strcmp(method_text, "lsb") == 0) {
         *result_code = PLAINSIGHT_OK;
         return PLAINSIGHT_EMBED_LSB;
-    }
-
-    // Spread is reserved for future builds with a real implementation
-    if (strcmp(method_text, "spread") == 0) {
-        *result_code = PLAINSIGHT_ERR_UNSUPPORTED;
-        return PLAINSIGHT_EMBED_INVALID;
     }
 
     *result_code = PLAINSIGHT_ERR_ARGS;

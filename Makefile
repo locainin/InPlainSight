@@ -47,6 +47,7 @@ APP_SRCS := \
 
 CORE_SRCS := $(filter-out src/main.c,$(APP_SRCS))
 TEST_SRCS := tests/test_container.c tests/test_compress.c tests/test_crypto_kat.c tests/test_roundtrip.c tests/test_image_format.c tests/test_capacity.c tests/test_split_outer_v2.c tests/test_split_manifest.c tests/test_split_collect.c tests/test_split_plan.c tests/test_crypto_aad.c
+ALL_HEADERS := $(shell fd -e h . include src)
 ALL_C_SRCS := $(APP_SRCS) $(TEST_SRCS)
 RUST_UI_DIR := ui
 
@@ -169,19 +170,19 @@ $(PROJECT)-clang-release: $(CLANG_REL_OBJS)
 	@mkdir -p $(dir $@)
 	$(CLANG) $(CLANG_REL_LDFLAGS) -o $@ $^ $(LDLIBS_COMMON)
 
-$(BUILD_DIR)/gcc/sanitize/%.o: %.c
+$(BUILD_DIR)/gcc/sanitize/%.o: %.c $(ALL_HEADERS)
 	@mkdir -p $(dir $@)
 	$(GCC) $(CPPFLAGS_COMMON) $(SAN_FLAGS) -c $< -o $@
 
-$(BUILD_DIR)/gcc/release/%.o: %.c
+$(BUILD_DIR)/gcc/release/%.o: %.c $(ALL_HEADERS)
 	@mkdir -p $(dir $@)
 	$(GCC) $(CPPFLAGS_COMMON) $(REL_FLAGS) -c $< -o $@
 
-$(BUILD_DIR)/clang/sanitize/%.o: %.c
+$(BUILD_DIR)/clang/sanitize/%.o: %.c $(ALL_HEADERS)
 	@mkdir -p $(dir $@)
 	$(CLANG) $(CPPFLAGS_COMMON) $(SAN_FLAGS) -c $< -o $@
 
-$(BUILD_DIR)/clang/release/%.o: %.c
+$(BUILD_DIR)/clang/release/%.o: %.c $(ALL_HEADERS)
 	@mkdir -p $(dir $@)
 	$(CLANG) $(CPPFLAGS_COMMON) $(CLANG_REL_FLAGS) -c $< -o $@
 
@@ -283,6 +284,7 @@ test-gcc: $(GCC_SAN_TEST_BINS)
 	$(BUILD_DIR)/gcc/sanitize/tests/test_split_outer_v2
 	$(BUILD_DIR)/gcc/sanitize/tests/test_split_manifest
 	$(BUILD_DIR)/gcc/sanitize/tests/test_split_collect
+	$(BUILD_DIR)/gcc/sanitize/tests/test_split_plan
 	$(BUILD_DIR)/gcc/sanitize/tests/test_crypto_aad
 
 build-tests-gcc: $(GCC_SAN_TEST_BINS)
@@ -297,6 +299,7 @@ test-clang: $(CLANG_SAN_TEST_BINS)
 	$(BUILD_DIR)/clang/sanitize/tests/test_split_outer_v2
 	$(BUILD_DIR)/clang/sanitize/tests/test_split_manifest
 	$(BUILD_DIR)/clang/sanitize/tests/test_split_collect
+	$(BUILD_DIR)/clang/sanitize/tests/test_split_plan
 	$(BUILD_DIR)/clang/sanitize/tests/test_crypto_aad
 
 build-tests-clang: $(CLANG_SAN_TEST_BINS)

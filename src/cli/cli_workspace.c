@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include "cli_internal.h"
 
 // One static workspace avoids repeated large stack allocations

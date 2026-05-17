@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include "../include/error.h"
 
 const char *plainsight_error_str(plainsight_error code) {
@@ -11,7 +14,7 @@ const char *plainsight_error_str(plainsight_error code) {
             return "invalid arguments";
         case PLAINSIGHT_ERR_IO:
             // IO errors avoid leaking low-level errno details through this API
-            return "input output failure";
+            return "I/O failure";
         case PLAINSIGHT_ERR_TOO_LARGE:
             // Size cap violations are grouped under one deterministic label
             return "input exceeds configured limits";
