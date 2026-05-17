@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -80,8 +83,18 @@ static plainsight_error plainsight_cli_parse_density_arg(const char *value_text,
     return PLAINSIGHT_OK;
 }
 
+static plainsight_error plainsight_cli_reject_duplicate_arg(const char *flag_text) {
+    (void)fputs("duplicate argument: ", stderr);
+    (void)fputs(flag_text, stderr);
+    (void)fputc('\n', stderr);
+    return PLAINSIGHT_ERR_ARGS;
+}
+
 plainsight_error plainsight_cli_parse_hide_args(int argc, char **argv, plainsight_hide_options *options) {
     int argument_index = 0;
+    int method_seen = 0;
+    int compress_seen = 0;
+    int split_seen = 0;
 
     if (argv == NULL || options == NULL) {
         return PLAINSIGHT_ERR_ARGS;
@@ -95,6 +108,7 @@ plainsight_error plainsight_cli_parse_hide_args(int argc, char **argv, plainsigh
     options->output_template = NULL;
     options->passphrase_path = NULL;
     options->method = PLAINSIGHT_EMBED_LSB;
+    options->compression_mode = PLAINSIGHT_COMPRESSION_NONE;
     options->split_auto = 0;
 
     // Subcommand token is argv[1], options begin at argv[2]
@@ -104,39 +118,60 @@ plainsight_error plainsight_cli_parse_hide_args(int argc, char **argv, plainsigh
 
         // Each flag consumes its following value when present
         if ((strcmp(argument_text, "--cover") == 0) && (argument_index + 1 < argc)) {
+            if (options->cover_path != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->cover_path = argv[argument_index];
             continue;
         }
 
         if ((strcmp(argument_text, "--payload") == 0) && (argument_index + 1 < argc)) {
+            if (options->payload_path != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->payload_path = argv[argument_index];
             continue;
         }
 
         if ((strcmp(argument_text, "--output") == 0) && (argument_index + 1 < argc)) {
+            if (options->output_path != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->output_path = argv[argument_index];
             continue;
         }
         if ((strcmp(argument_text, "--output-dir") == 0) && (argument_index + 1 < argc)) {
+            if (options->output_dir != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->output_dir = argv[argument_index];
             continue;
         }
         if ((strcmp(argument_text, "--output-template") == 0) && (argument_index + 1 < argc)) {
+            if (options->output_template != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->output_template = argv[argument_index];
             continue;
         }
 
         if ((strcmp(argument_text, "--passphrase-file") == 0) && (argument_index + 1 < argc)) {
+            if (options->passphrase_path != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->passphrase_path = argv[argument_index];
             continue;
         }
         if ((strcmp(argument_text, "--split") == 0) && (argument_index + 1 < argc)) {
+            if (split_seen != 0) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             if (strcmp(argv[argument_index], "auto") != 0) {
                 (void)fputs("invalid --split for hide command (allowed: auto)\n", stderr);
@@ -144,11 +179,39 @@ plainsight_error plainsight_cli_parse_hide_args(int argc, char **argv, plainsigh
             }
             // split_auto switches hide into output-dir mode and shard planning
             options->split_auto = 1;
+            split_seen = 1;
             continue;
+        }
+
+        if ((strcmp(argument_text, "--compress") == 0) && (argument_index + 1 < argc)) {
+            if (compress_seen != 0) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
+            argument_index++;
+            if (strcmp(argv[argument_index], "none") == 0) {
+                options->compression_mode = PLAINSIGHT_COMPRESSION_NONE;
+                compress_seen = 1;
+                continue;
+            }
+            if (strcmp(argv[argument_index], "auto") == 0) {
+                options->compression_mode = PLAINSIGHT_CLI_COMPRESSION_AUTO;
+                compress_seen = 1;
+                continue;
+            }
+            if (strcmp(argv[argument_index], "zstd") == 0) {
+                options->compression_mode = PLAINSIGHT_COMPRESSION_ZSTD;
+                compress_seen = 1;
+                continue;
+            }
+            (void)fputs("invalid --compress for hide command (allowed: none, auto, zstd)\n", stderr);
+            return PLAINSIGHT_ERR_ARGS;
         }
 
         if ((strcmp(argument_text, "--method") == 0) && (argument_index + 1 < argc)) {
             plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
+            if (method_seen != 0) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->method = plainsight_cli_parse_method(argv[argument_index], &result_code);
             if (result_code != PLAINSIGHT_OK) {
@@ -159,6 +222,7 @@ plainsight_error plainsight_cli_parse_hide_args(int argc, char **argv, plainsigh
                 (void)fputs("invalid --method for hide command\n", stderr);
                 return result_code;
             }
+            method_seen = 1;
             continue;
         }
 
@@ -197,12 +261,17 @@ plainsight_error plainsight_cli_parse_hide_args(int argc, char **argv, plainsigh
         (void)fputs("--output-template requires --split auto\n", stderr);
         return PLAINSIGHT_ERR_ARGS;
     }
+    if (options->split_auto != 0 && options->compression_mode != PLAINSIGHT_COMPRESSION_NONE) {
+        (void)fputs("--compress is not supported with --split auto in this build\n", stderr);
+        return PLAINSIGHT_ERR_UNSUPPORTED;
+    }
 
     return PLAINSIGHT_OK;
 }
 
 plainsight_error plainsight_cli_parse_extract_args(int argc, char **argv, plainsight_extract_options *options) {
     int argument_index = 0;
+    int method_seen = 0;
 
     if (argv == NULL || options == NULL) {
         return PLAINSIGHT_ERR_ARGS;
@@ -218,23 +287,35 @@ plainsight_error plainsight_cli_parse_extract_args(int argc, char **argv, plains
         const char *argument_text = argv[argument_index];
 
         if ((strcmp(argument_text, "--input") == 0) && (argument_index + 1 < argc)) {
+            if (options->input_path != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->input_path = argv[argument_index];
             continue;
         }
         if ((strcmp(argument_text, "--input-dir") == 0) && (argument_index + 1 < argc)) {
+            if (options->input_dir != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->input_dir = argv[argument_index];
             continue;
         }
 
         if ((strcmp(argument_text, "--output") == 0) && (argument_index + 1 < argc)) {
+            if (options->output_path != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->output_path = argv[argument_index];
             continue;
         }
 
         if ((strcmp(argument_text, "--passphrase-file") == 0) && (argument_index + 1 < argc)) {
+            if (options->passphrase_path != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->passphrase_path = argv[argument_index];
             continue;
@@ -242,6 +323,9 @@ plainsight_error plainsight_cli_parse_extract_args(int argc, char **argv, plains
 
         if ((strcmp(argument_text, "--method") == 0) && (argument_index + 1 < argc)) {
             plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
+            if (method_seen != 0) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->method = plainsight_cli_parse_method(argv[argument_index], &result_code);
             if (result_code != PLAINSIGHT_OK) {
@@ -252,6 +336,7 @@ plainsight_error plainsight_cli_parse_extract_args(int argc, char **argv, plains
                 (void)fputs("invalid --method for extract command\n", stderr);
                 return result_code;
             }
+            method_seen = 1;
             continue;
         }
 
@@ -280,6 +365,9 @@ plainsight_error plainsight_cli_parse_extract_args(int argc, char **argv, plains
 
 plainsight_error plainsight_cli_parse_info_args(int argc, char **argv, plainsight_info_options *options) {
     int argument_index = 0;
+    int method_seen = 0;
+    int lsb_seen = 0;
+    int density_seen = 0;
 
     if (argv == NULL || options == NULL) {
         return PLAINSIGHT_ERR_ARGS;
@@ -298,17 +386,26 @@ plainsight_error plainsight_cli_parse_info_args(int argc, char **argv, plainsigh
         const char *argument_text = argv[argument_index];
 
         if ((strcmp(argument_text, "--cover") == 0) && (argument_index + 1 < argc)) {
+            if (options->cover_path != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->cover_path = argv[argument_index];
             continue;
         }
 
         if ((strcmp(argument_text, "--payload") == 0) && (argument_index + 1 < argc)) {
+            if (options->payload_path != NULL) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->payload_path = argv[argument_index];
             continue;
         }
         if ((strcmp(argument_text, "--payload-bytes") == 0) && (argument_index + 1 < argc)) {
+            if (options->payload_bytes_provided != 0) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             if (plainsight_cli_parse_u64_arg(argv[argument_index], &options->payload_bytes_value) != PLAINSIGHT_OK) {
                 (void)fputs("invalid --payload-bytes for info command\n", stderr);
@@ -320,6 +417,9 @@ plainsight_error plainsight_cli_parse_info_args(int argc, char **argv, plainsigh
 
         if ((strcmp(argument_text, "--method") == 0) && (argument_index + 1 < argc)) {
             plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
+            if (method_seen != 0) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             options->method = plainsight_cli_parse_method(argv[argument_index], &result_code);
             if (result_code != PLAINSIGHT_OK) {
@@ -330,28 +430,40 @@ plainsight_error plainsight_cli_parse_info_args(int argc, char **argv, plainsigh
                 (void)fputs("invalid --method for info command\n", stderr);
                 return result_code;
             }
+            method_seen = 1;
             continue;
         }
 
         if ((strcmp(argument_text, "--lsb-bits") == 0) && (argument_index + 1 < argc)) {
+            if (lsb_seen != 0) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             if (plainsight_cli_parse_u8_arg(argv[argument_index], 1u, 1u, &options->lsb_bits) != PLAINSIGHT_OK) {
                 (void)fputs("invalid --lsb-bits for info command (allowed: 1)\n", stderr);
                 return PLAINSIGHT_ERR_ARGS;
             }
+            lsb_seen = 1;
             continue;
         }
 
         if ((strcmp(argument_text, "--density") == 0) && (argument_index + 1 < argc)) {
+            if (density_seen != 0) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             argument_index++;
             if (plainsight_cli_parse_density_arg(argv[argument_index], &options->density_per_mille) != PLAINSIGHT_OK) {
                 (void)fputs("invalid --density for info command (range: 0.001 to 1.0)\n", stderr);
                 return PLAINSIGHT_ERR_ARGS;
             }
+            density_seen = 1;
             continue;
         }
 
         if (strcmp(argument_text, "--json") == 0) {
+            if (options->json_output != 0) {
+                return plainsight_cli_reject_duplicate_arg(argument_text);
+            }
             options->json_output = 1;
             continue;
         }
