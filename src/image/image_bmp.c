@@ -1,13 +1,15 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 
 #include "../../include/image/image.h"
+#include "../../include/image/image_scratch.h"
 #include "../../include/image/image_bmp.h"
 #include "../../include/io.h"
+#include "../../include/securemem.h"
 
-// Fixed buffers avoid heap usage while still allowing bounded file IO
-static uint8_t g_bmp_input_bytes[PLAINSIGHT_MAX_IMAGE_FILE_BYTES];
-static uint8_t g_bmp_output_bytes[PLAINSIGHT_MAX_IMAGE_FILE_BYTES];
 
 static uint16_t plainsight_bmp_read_u16_le(const uint8_t *bytes) {
     uint16_t value = 0u;
@@ -104,7 +106,7 @@ plainsight_error plainsight_image_bmp_read(const char *path, plainsight_image *i
         return PLAINSIGHT_ERR_ARGS;
     }
 
-    result_code = plainsight_io_read_file(path, g_bmp_input_bytes, sizeof(g_bmp_input_bytes), &input_length);
+    result_code = plainsight_io_read_file(path, g_plainsight_image_input_bytes, sizeof(g_plainsight_image_input_bytes), &input_length);
     if (result_code != PLAINSIGHT_OK) {
         return result_code;
     }
@@ -114,17 +116,17 @@ plainsight_error plainsight_image_bmp_read(const char *path, plainsight_image *i
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 
-    if (g_bmp_input_bytes[0] != (uint8_t)'B' || g_bmp_input_bytes[1] != (uint8_t)'M') {
+    if (g_plainsight_image_input_bytes[0] != (uint8_t)'B' || g_plainsight_image_input_bytes[1] != (uint8_t)'M') {
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 
-    pixel_data_offset = plainsight_bmp_read_u32_le(g_bmp_input_bytes + 10u);
-    dib_header_size = plainsight_bmp_read_u32_le(g_bmp_input_bytes + 14u);
-    encoded_width = plainsight_bmp_read_i32_le(g_bmp_input_bytes + 18u);
-    encoded_height = plainsight_bmp_read_i32_le(g_bmp_input_bytes + 22u);
-    planes = plainsight_bmp_read_u16_le(g_bmp_input_bytes + 26u);
-    bits_per_pixel = plainsight_bmp_read_u16_le(g_bmp_input_bytes + 28u);
-    compression = plainsight_bmp_read_u32_le(g_bmp_input_bytes + 30u);
+    pixel_data_offset = plainsight_bmp_read_u32_le(g_plainsight_image_input_bytes + 10u);
+    dib_header_size = plainsight_bmp_read_u32_le(g_plainsight_image_input_bytes + 14u);
+    encoded_width = plainsight_bmp_read_i32_le(g_plainsight_image_input_bytes + 18u);
+    encoded_height = plainsight_bmp_read_i32_le(g_plainsight_image_input_bytes + 22u);
+    planes = plainsight_bmp_read_u16_le(g_plainsight_image_input_bytes + 26u);
+    bits_per_pixel = plainsight_bmp_read_u16_le(g_plainsight_image_input_bytes + 28u);
+    compression = plainsight_bmp_read_u32_le(g_plainsight_image_input_bytes + 30u);
 
     if (dib_header_size < 40u) {
         return PLAINSIGHT_ERR_UNSUPPORTED;
@@ -141,7 +143,9 @@ plainsight_error plainsight_image_bmp_read(const char *path, plainsight_image *i
 
     image_width = (uint32_t)encoded_width;
     if (encoded_height < 0) {
-        image_height = (uint32_t)(-encoded_height);
+        // Negating INT32_MIN is undefined for signed integers
+        // Two's-complement unsigned math gives the absolute magnitude safely
+        image_height = (~(uint32_t)encoded_height) + 1u;
     } else {
         image_height = (uint32_t)encoded_height;
     }
@@ -194,9 +198,9 @@ plainsight_error plainsight_image_bmp_read(const char *path, plainsight_image *i
         for (column_index = 0u; column_index < image_width; column_index++) {
             size_t source_pixel_offset = source_row_offset + (size_t)column_index * 3u;
             size_t destination_pixel_offset = destination_row_offset + (size_t)column_index * 3u;
-            uint8_t blue_component = g_bmp_input_bytes[source_pixel_offset + 0u];
-            uint8_t green_component = g_bmp_input_bytes[source_pixel_offset + 1u];
-            uint8_t red_component = g_bmp_input_bytes[source_pixel_offset + 2u];
+            uint8_t blue_component = g_plainsight_image_input_bytes[source_pixel_offset + 0u];
+            uint8_t green_component = g_plainsight_image_input_bytes[source_pixel_offset + 1u];
+            uint8_t red_component = g_plainsight_image_input_bytes[source_pixel_offset + 2u];
 
             // BMP stores BGR while project internals use RGB
             image->pixels[destination_pixel_offset + 0u] = red_component;
@@ -260,21 +264,19 @@ plainsight_error plainsight_image_bmp_write(const char *path, const plainsight_i
     }
 
     // Clear only the used prefix so row padding bytes are deterministic
-    for (row_index = 0u; row_index < (uint32_t)total_file_bytes; row_index++) {
-        g_bmp_output_bytes[row_index] = 0u;
-    }
+    plainsight_secure_zero(g_plainsight_image_output_bytes, (size_t)total_file_bytes);
 
-    g_bmp_output_bytes[0] = (uint8_t)'B';
-    g_bmp_output_bytes[1] = (uint8_t)'M';
-    plainsight_bmp_write_u32_le(g_bmp_output_bytes + 2u, (uint32_t)total_file_bytes);
-    plainsight_bmp_write_u32_le(g_bmp_output_bytes + 10u, 54u);
-    plainsight_bmp_write_u32_le(g_bmp_output_bytes + 14u, 40u);
-    plainsight_bmp_write_u32_le(g_bmp_output_bytes + 18u, image_width);
-    plainsight_bmp_write_u32_le(g_bmp_output_bytes + 22u, image_height);
-    plainsight_bmp_write_u16_le(g_bmp_output_bytes + 26u, 1u);
-    plainsight_bmp_write_u16_le(g_bmp_output_bytes + 28u, 24u);
-    plainsight_bmp_write_u32_le(g_bmp_output_bytes + 30u, 0u);
-    plainsight_bmp_write_u32_le(g_bmp_output_bytes + 34u, (uint32_t)padded_pixel_bytes);
+    g_plainsight_image_output_bytes[0] = (uint8_t)'B';
+    g_plainsight_image_output_bytes[1] = (uint8_t)'M';
+    plainsight_bmp_write_u32_le(g_plainsight_image_output_bytes + 2u, (uint32_t)total_file_bytes);
+    plainsight_bmp_write_u32_le(g_plainsight_image_output_bytes + 10u, 54u);
+    plainsight_bmp_write_u32_le(g_plainsight_image_output_bytes + 14u, 40u);
+    plainsight_bmp_write_u32_le(g_plainsight_image_output_bytes + 18u, image_width);
+    plainsight_bmp_write_u32_le(g_plainsight_image_output_bytes + 22u, image_height);
+    plainsight_bmp_write_u16_le(g_plainsight_image_output_bytes + 26u, 1u);
+    plainsight_bmp_write_u16_le(g_plainsight_image_output_bytes + 28u, 24u);
+    plainsight_bmp_write_u32_le(g_plainsight_image_output_bytes + 30u, 0u);
+    plainsight_bmp_write_u32_le(g_plainsight_image_output_bytes + 34u, (uint32_t)padded_pixel_bytes);
 
     for (row_index = 0u; row_index < image_height; row_index++) {
         uint32_t destination_row_index = image_height - 1u - row_index;
@@ -290,11 +292,11 @@ plainsight_error plainsight_image_bmp_write(const char *path, const plainsight_i
             uint8_t blue_component = image->pixels[source_pixel_offset + 2u];
 
             // BMP byte order is BGR
-            g_bmp_output_bytes[destination_pixel_offset + 0u] = blue_component;
-            g_bmp_output_bytes[destination_pixel_offset + 1u] = green_component;
-            g_bmp_output_bytes[destination_pixel_offset + 2u] = red_component;
+            g_plainsight_image_output_bytes[destination_pixel_offset + 0u] = blue_component;
+            g_plainsight_image_output_bytes[destination_pixel_offset + 1u] = green_component;
+            g_plainsight_image_output_bytes[destination_pixel_offset + 2u] = red_component;
         }
     }
 
-    return plainsight_io_write_file(path, g_bmp_output_bytes, (size_t)total_file_bytes);
+    return plainsight_io_write_file(path, g_plainsight_image_output_bytes, (size_t)total_file_bytes);
 }

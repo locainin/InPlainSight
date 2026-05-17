@@ -37,6 +37,7 @@ APP_SRCS := \
 	src/split/plan.c \
 	src/split/collect.c \
 	src/image/image_format.c \
+	src/image/image_scratch.c \
 	src/image/image_png.c \
 	src/image/image_jxl.c \
 	src/image/image_jpeg.c \

@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <errno.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -5,12 +8,10 @@
 #include <stdlib.h>
 
 #include "../../include/image/image.h"
+#include "../../include/image/image_scratch.h"
 #include "../../include/image/image_ppm.h"
 #include "../../include/io.h"
 
-// Fixed buffers keep memory bounded and make ownership simple
-static uint8_t g_ppm_input_bytes[PLAINSIGHT_MAX_IMAGE_FILE_BYTES];
-static uint8_t g_ppm_output_bytes[PLAINSIGHT_MAX_IMAGE_FILE_BYTES];
 
 static int plainsight_ppm_is_whitespace(uint8_t character) {
     return character == (uint8_t)' ' ||
@@ -256,12 +257,12 @@ plainsight_error plainsight_image_ppm_read(const char *path, plainsight_image *i
         return PLAINSIGHT_ERR_ARGS;
     }
 
-    result_code = plainsight_io_read_file(path, g_ppm_input_bytes, sizeof(g_ppm_input_bytes), &input_length);
+    result_code = plainsight_io_read_file(path, g_plainsight_image_input_bytes, sizeof(g_plainsight_image_input_bytes), &input_length);
     if (result_code != PLAINSIGHT_OK) {
         return result_code;
     }
 
-    result_code = plainsight_ppm_next_token(g_ppm_input_bytes,
+    result_code = plainsight_ppm_next_token(g_plainsight_image_input_bytes,
                                     input_length,
                                     &cursor_offset,
                                     token_text,
@@ -274,7 +275,7 @@ plainsight_error plainsight_image_ppm_read(const char *path, plainsight_image *i
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 
-    result_code = plainsight_ppm_next_token(g_ppm_input_bytes,
+    result_code = plainsight_ppm_next_token(g_plainsight_image_input_bytes,
                                     input_length,
                                     &cursor_offset,
                                     token_text,
@@ -288,7 +289,7 @@ plainsight_error plainsight_image_ppm_read(const char *path, plainsight_image *i
         return result_code;
     }
 
-    result_code = plainsight_ppm_next_token(g_ppm_input_bytes,
+    result_code = plainsight_ppm_next_token(g_plainsight_image_input_bytes,
                                     input_length,
                                     &cursor_offset,
                                     token_text,
@@ -302,7 +303,7 @@ plainsight_error plainsight_image_ppm_read(const char *path, plainsight_image *i
         return result_code;
     }
 
-    result_code = plainsight_ppm_next_token(g_ppm_input_bytes,
+    result_code = plainsight_ppm_next_token(g_plainsight_image_input_bytes,
                                     input_length,
                                     &cursor_offset,
                                     token_text,
@@ -331,7 +332,7 @@ plainsight_error plainsight_image_ppm_read(const char *path, plainsight_image *i
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
-    result_code = plainsight_ppm_consume_raster_delimiter(g_ppm_input_bytes, input_length, &cursor_offset);
+    result_code = plainsight_ppm_consume_raster_delimiter(g_plainsight_image_input_bytes, input_length, &cursor_offset);
     if (result_code != PLAINSIGHT_OK) {
         return result_code;
     }
@@ -351,7 +352,7 @@ plainsight_error plainsight_image_ppm_read(const char *path, plainsight_image *i
     image->data_len = (size_t)rgb_bytes;
 
     for (pixel_index = 0u; pixel_index < (size_t)rgb_bytes; pixel_index++) {
-        image->pixels[pixel_index] = g_ppm_input_bytes[cursor_offset + pixel_index];
+        image->pixels[pixel_index] = g_plainsight_image_input_bytes[cursor_offset + pixel_index];
     }
 
     return PLAINSIGHT_OK;
@@ -427,8 +428,8 @@ plainsight_error plainsight_image_ppm_write(const char *path, const plainsight_i
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
-    result_code = plainsight_ppm_copy_bytes(g_ppm_output_bytes,
-                                    sizeof(g_ppm_output_bytes),
+    result_code = plainsight_ppm_copy_bytes(g_plainsight_image_output_bytes,
+                                    sizeof(g_plainsight_image_output_bytes),
                                     &output_offset,
                                     header_text,
                                     header_length);
@@ -436,8 +437,8 @@ plainsight_error plainsight_image_ppm_write(const char *path, const plainsight_i
         return result_code;
     }
 
-    result_code = plainsight_ppm_copy_bytes(g_ppm_output_bytes,
-                                    sizeof(g_ppm_output_bytes),
+    result_code = plainsight_ppm_copy_bytes(g_plainsight_image_output_bytes,
+                                    sizeof(g_plainsight_image_output_bytes),
                                     &output_offset,
                                     image->pixels,
                                     (size_t)rgb_bytes);
@@ -445,5 +446,5 @@ plainsight_error plainsight_image_ppm_write(const char *path, const plainsight_i
         return result_code;
     }
 
-    return plainsight_io_write_file(path, g_ppm_output_bytes, output_offset);
+    return plainsight_io_write_file(path, g_plainsight_image_output_bytes, output_offset);
 }

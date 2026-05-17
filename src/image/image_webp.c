@@ -1,13 +1,16 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 
 #include <webp/decode.h>
 
 #include "../../include/image/image.h"
+#include "../../include/image/image_scratch.h"
 #include "../../include/image/image_webp.h"
 #include "../../include/io.h"
 
-static uint8_t g_webp_input_bytes[PLAINSIGHT_MAX_IMAGE_FILE_BYTES];
 
 static plainsight_error plainsight_webp_validate_geometry(uint32_t image_width,
                                           uint32_t image_height,
@@ -48,13 +51,13 @@ plainsight_error plainsight_image_webp_read(const char *path, plainsight_image *
     }
 
     // Read compressed input into a bounded scratch buffer
-    result_code = plainsight_io_read_file(path, g_webp_input_bytes, sizeof(g_webp_input_bytes), &input_length);
+    result_code = plainsight_io_read_file(path, g_plainsight_image_input_bytes, sizeof(g_plainsight_image_input_bytes), &input_length);
     if (result_code != PLAINSIGHT_OK) {
         return result_code;
     }
 
     // Header probe returns decoded geometry without full pixel decode
-    if (WebPGetInfo(g_webp_input_bytes, input_length, &decoded_width, &decoded_height) == 0) {
+    if (WebPGetInfo(g_plainsight_image_input_bytes, input_length, &decoded_width, &decoded_height) == 0) {
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 
@@ -74,7 +77,7 @@ plainsight_error plainsight_image_webp_read(const char *path, plainsight_image *
     }
 
     // Decode directly into final RGB buffer so no extra copy is needed
-    decode_pointer = WebPDecodeRGBInto(g_webp_input_bytes,
+    decode_pointer = WebPDecodeRGBInto(g_plainsight_image_input_bytes,
                                        input_length,
                                        image->pixels,
                                        (size_t)rgb_bytes,

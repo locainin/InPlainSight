@@ -1,7 +1,11 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 
 #include "../../include/image/image.h"
+#include "../../include/image/image_scratch.h"
 #include "../../include/image/image_jxl.h"
 
 #if PLAINSIGHT_HAS_LIBJXL
@@ -11,11 +15,6 @@
 #include <jxl/thread_parallel_runner.h>
 
 #include "../../include/io.h"
-
-// Shared bounded buffers keep decode and encode heap-free in this layer
-// These buffers are process-global and therefore not reentrant
-static uint8_t g_jxl_input[PLAINSIGHT_MAX_IMAGE_FILE_BYTES];
-static uint8_t g_jxl_output[PLAINSIGHT_MAX_IMAGE_FILE_BYTES];
 
 plainsight_error plainsight_image_jxl_read(const char *path, plainsight_image *image) {
     size_t input_len = 0u;
@@ -43,7 +42,7 @@ plainsight_error plainsight_image_jxl_read(const char *path, plainsight_image *i
     }
 
     // Decode starts from a bounded in-memory buffer
-    result_code = plainsight_io_read_file(path, g_jxl_input, sizeof(g_jxl_input), &input_len);
+    result_code = plainsight_io_read_file(path, g_plainsight_image_input_bytes, sizeof(g_plainsight_image_input_bytes), &input_len);
     if (result_code != PLAINSIGHT_OK) {
         return result_code;
     }
@@ -70,7 +69,7 @@ plainsight_error plainsight_image_jxl_read(const char *path, plainsight_image *i
         goto cleanup;
     }
 
-    if (JxlDecoderSetInput(decoder_state, g_jxl_input, input_len) != JXL_DEC_SUCCESS) {
+    if (JxlDecoderSetInput(decoder_state, g_plainsight_image_input_bytes, input_len) != JXL_DEC_SUCCESS) {
         result_code = PLAINSIGHT_ERR_BAD_FORMAT;
         goto cleanup;
     }
@@ -200,8 +199,8 @@ cleanup:
 }
 
 plainsight_error plainsight_image_jxl_write(const char *path, const plainsight_image *image) {
-    uint8_t *next_out = g_jxl_output;
-    size_t avail_out = sizeof(g_jxl_output);
+    uint8_t *next_out = g_plainsight_image_output_bytes;
+    size_t avail_out = sizeof(g_plainsight_image_output_bytes);
     JxlEncoder *encoder_state = NULL;
     JxlEncoderFrameSettings *encoder_frame_settings = NULL;
     JxlBasicInfo image_info;
@@ -325,8 +324,8 @@ plainsight_error plainsight_image_jxl_write(const char *path, const plainsight_i
         }
     }
 
-    output_len = sizeof(g_jxl_output) - avail_out;
-    result_code = plainsight_io_write_file(path, g_jxl_output, output_len);
+    output_len = sizeof(g_plainsight_image_output_bytes) - avail_out;
+    result_code = plainsight_io_write_file(path, g_plainsight_image_output_bytes, output_len);
 
 cleanup:
     if (parallel_runner != NULL) {
