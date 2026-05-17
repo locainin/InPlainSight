@@ -26,6 +26,7 @@ APP_SRCS := \
 	src/capacity.c \
 	src/info.c \
 	src/io.c \
+	src/compress.c \
 	src/securemem.c \
 	src/container.c \
 	src/crypto.c \
@@ -45,7 +46,7 @@ APP_SRCS := \
 	src/image/image_webp.c
 
 CORE_SRCS := $(filter-out src/main.c,$(APP_SRCS))
-TEST_SRCS := tests/test_container.c tests/test_crypto_kat.c tests/test_roundtrip.c tests/test_image_format.c tests/test_capacity.c tests/test_split_outer_v2.c tests/test_split_manifest.c tests/test_split_collect.c tests/test_split_plan.c tests/test_crypto_aad.c
+TEST_SRCS := tests/test_container.c tests/test_compress.c tests/test_crypto_kat.c tests/test_roundtrip.c tests/test_image_format.c tests/test_capacity.c tests/test_split_outer_v2.c tests/test_split_manifest.c tests/test_split_collect.c tests/test_split_plan.c tests/test_crypto_aad.c
 ALL_C_SRCS := $(APP_SRCS) $(TEST_SRCS)
 RUST_UI_DIR := ui
 
@@ -68,6 +69,8 @@ JPEG_CFLAGS := $(shell $(PKG_CONFIG) --cflags libjpeg 2>/dev/null)
 JPEG_LIBS := $(shell $(PKG_CONFIG) --libs libjpeg 2>/dev/null)
 WEBP_CFLAGS := $(shell $(PKG_CONFIG) --cflags libwebp 2>/dev/null)
 WEBP_LIBS := $(shell $(PKG_CONFIG) --libs libwebp 2>/dev/null)
+ZSTD_CFLAGS := $(shell $(PKG_CONFIG) --cflags libzstd 2>/dev/null)
+ZSTD_LIBS := $(shell $(PKG_CONFIG) --libs libzstd 2>/dev/null)
 
 ifeq ($(strip $(SODIUM_LIBS)),)
 $(error libsodium is required and was not found via pkg-config)
@@ -85,8 +88,12 @@ ifeq ($(strip $(WEBP_LIBS)),)
 $(error libwebp is required and was not found via pkg-config)
 endif
 
-CPPFLAGS_COMMON := -Iinclude $(SODIUM_CFLAGS) $(PNG_CFLAGS) $(JPEG_CFLAGS) $(WEBP_CFLAGS)
-LDLIBS_COMMON := $(SODIUM_LIBS) $(PNG_LIBS) $(JPEG_LIBS) $(WEBP_LIBS)
+ifeq ($(strip $(ZSTD_LIBS)),)
+$(error libzstd is required and was not found via pkg-config)
+endif
+
+CPPFLAGS_COMMON := -Iinclude $(SODIUM_CFLAGS) $(PNG_CFLAGS) $(JPEG_CFLAGS) $(WEBP_CFLAGS) $(ZSTD_CFLAGS)
+LDLIBS_COMMON := $(SODIUM_LIBS) $(PNG_LIBS) $(JPEG_LIBS) $(WEBP_LIBS) $(ZSTD_LIBS)
 
 ifneq ($(strip $(JXL_LIBS)),)
 # JPEG XL support is enabled when pkg-config finds both encode and thread libs
@@ -104,6 +111,7 @@ CLANG_REL_OBJS := $(patsubst %.c,$(BUILD_DIR)/clang/release/%.o,$(APP_SRCS))
 
 GCC_SAN_TEST_BINS := \
 	$(BUILD_DIR)/gcc/sanitize/tests/test_container \
+	$(BUILD_DIR)/gcc/sanitize/tests/test_compress \
 	$(BUILD_DIR)/gcc/sanitize/tests/test_crypto_kat \
 	$(BUILD_DIR)/gcc/sanitize/tests/test_roundtrip \
 	$(BUILD_DIR)/gcc/sanitize/tests/test_image_format \
@@ -116,6 +124,7 @@ GCC_SAN_TEST_BINS := \
 
 CLANG_SAN_TEST_BINS := \
 	$(BUILD_DIR)/clang/sanitize/tests/test_container \
+	$(BUILD_DIR)/clang/sanitize/tests/test_compress \
 	$(BUILD_DIR)/clang/sanitize/tests/test_crypto_kat \
 	$(BUILD_DIR)/clang/sanitize/tests/test_roundtrip \
 	$(BUILD_DIR)/clang/sanitize/tests/test_image_format \
@@ -180,6 +189,10 @@ $(BUILD_DIR)/gcc/sanitize/tests/test_container: $(BUILD_DIR)/gcc/sanitize/tests/
 	@mkdir -p $(dir $@)
 	$(GCC) $(SAN_LDFLAGS) -o $@ $^
 
+$(BUILD_DIR)/gcc/sanitize/tests/test_compress: $(BUILD_DIR)/gcc/sanitize/tests/test_compress.o $(patsubst %.c,$(BUILD_DIR)/gcc/sanitize/%.o,src/error.c src/compress.c)
+	@mkdir -p $(dir $@)
+	$(GCC) $(SAN_LDFLAGS) -o $@ $^ $(ZSTD_LIBS)
+
 $(BUILD_DIR)/gcc/sanitize/tests/test_crypto_kat: $(BUILD_DIR)/gcc/sanitize/tests/test_crypto_kat.o $(patsubst %.c,$(BUILD_DIR)/gcc/sanitize/%.o,src/error.c src/crypto.c)
 	@mkdir -p $(dir $@)
 	$(GCC) $(SAN_LDFLAGS) -o $@ $^ $(SODIUM_LIBS)
@@ -220,6 +233,10 @@ $(BUILD_DIR)/clang/sanitize/tests/test_container: $(BUILD_DIR)/clang/sanitize/te
 	@mkdir -p $(dir $@)
 	$(CLANG) $(SAN_LDFLAGS) -o $@ $^
 
+$(BUILD_DIR)/clang/sanitize/tests/test_compress: $(BUILD_DIR)/clang/sanitize/tests/test_compress.o $(patsubst %.c,$(BUILD_DIR)/clang/sanitize/%.o,src/error.c src/compress.c)
+	@mkdir -p $(dir $@)
+	$(CLANG) $(SAN_LDFLAGS) -o $@ $^ $(ZSTD_LIBS)
+
 $(BUILD_DIR)/clang/sanitize/tests/test_crypto_kat: $(BUILD_DIR)/clang/sanitize/tests/test_crypto_kat.o $(patsubst %.c,$(BUILD_DIR)/clang/sanitize/%.o,src/error.c src/crypto.c)
 	@mkdir -p $(dir $@)
 	$(CLANG) $(SAN_LDFLAGS) -o $@ $^ $(SODIUM_LIBS)
@@ -258,6 +275,7 @@ $(BUILD_DIR)/clang/sanitize/tests/test_crypto_aad: $(BUILD_DIR)/clang/sanitize/t
 
 test-gcc: $(GCC_SAN_TEST_BINS)
 	$(BUILD_DIR)/gcc/sanitize/tests/test_container
+	$(BUILD_DIR)/gcc/sanitize/tests/test_compress
 	$(BUILD_DIR)/gcc/sanitize/tests/test_crypto_kat
 	$(BUILD_DIR)/gcc/sanitize/tests/test_roundtrip
 	$(BUILD_DIR)/gcc/sanitize/tests/test_image_format
@@ -271,6 +289,7 @@ build-tests-gcc: $(GCC_SAN_TEST_BINS)
 
 test-clang: $(CLANG_SAN_TEST_BINS)
 	$(BUILD_DIR)/clang/sanitize/tests/test_container
+	$(BUILD_DIR)/clang/sanitize/tests/test_compress
 	$(BUILD_DIR)/clang/sanitize/tests/test_crypto_kat
 	$(BUILD_DIR)/clang/sanitize/tests/test_roundtrip
 	$(BUILD_DIR)/clang/sanitize/tests/test_image_format
@@ -326,7 +345,7 @@ clean:
 	rm -f $(PROJECT) $(PROJECT)-gcc-release $(PROJECT)-clang $(PROJECT)-clang-release
 	rm -f compile_commands.json
 	rm -rf final
-	rm -f src/*.o src/*/*.o src/*/*/*.o tests/*.o tests/test_container tests/test_crypto_kat tests/test_roundtrip tests/test_image_format tests/test_capacity tests/test_split_outer_v2 tests/test_split_manifest tests/test_split_collect tests/test_split_plan tests/test_crypto_aad
+	rm -f src/*.o src/*/*.o src/*/*/*.o tests/*.o tests/test_container tests/test_compress tests/test_crypto_kat tests/test_roundtrip tests/test_image_format tests/test_capacity tests/test_split_outer_v2 tests/test_split_manifest tests/test_split_collect tests/test_split_plan tests/test_crypto_aad
 
 deep-clean: clean
 	rm -f *.gcda *.gcno
