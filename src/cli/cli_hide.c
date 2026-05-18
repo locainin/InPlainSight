@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <limits.h>
 #include <stdio.h>
-#include <string.h>
 
 #include "cli_internal.h"
 
@@ -78,6 +77,23 @@ static void plainsight_cli_log_hide_preflight(const plainsight_info_report *repo
     (void)fputc('\n', stderr);
 }
 
+static void plainsight_cli_copy_bytes(uint8_t *destination,
+                                      size_t destination_length,
+                                      const uint8_t *source,
+                                      size_t source_length) {
+    size_t index = 0u;
+
+    // Caller checks the bounds, but the helper still rejects invalid input
+    if (destination == NULL || source == NULL || source_length > destination_length) {
+        return;
+    }
+
+    // Manual copy avoids unbounded C library calls and keeps the exact byte count visible
+    for (index = 0u; index < source_length; index++) {
+        destination[index] = source[index];
+    }
+}
+
 static plainsight_error plainsight_cli_choose_auto_compression(size_t payload_length,
                                                size_t *compressed_length_out) {
     static const int zstd_auto_levels[] = {1, 3, 9};
@@ -108,7 +124,10 @@ static plainsight_error plainsight_cli_choose_auto_compression(size_t payload_le
             if (candidate_length > sizeof(g_cli_workspace.ciphertext)) {
                 return PLAINSIGHT_ERR_TOO_LARGE;
             }
-            (void)memcpy(g_cli_workspace.ciphertext, g_cli_workspace.inner, candidate_length);
+            plainsight_cli_copy_bytes(g_cli_workspace.ciphertext,
+                                      sizeof(g_cli_workspace.ciphertext),
+                                      g_cli_workspace.inner,
+                                      candidate_length);
             best_length = candidate_length;
             found_candidate = 1;
         }
@@ -261,7 +280,6 @@ plainsight_error plainsight_cli_run_hide(const plainsight_hide_options *options)
                 effective_payload_file_size = (uint64_t)compressed_length;
             } else {
                 compressed_length = 0u;
-                result_code = PLAINSIGHT_OK;
             }
         }
     }

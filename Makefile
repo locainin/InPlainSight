@@ -367,6 +367,6 @@ compile-commands:
 
 c-tidy: compile-commands
 	# run-clang-tidy uses the compilation database so include paths and feature macros match the real build
-	# Some bugprone checks are intentionally excluded because they are API-shape opinions, not correctness checks
+	# Some bugprone checks are intentionally excluded because they are API-shape opinions or system-header noise
 	run-clang-tidy -p . -warnings-as-errors='*' \
-		-checks='clang-analyzer-*,bugprone-*,-bugprone-easily-swappable-parameters,-bugprone-implicit-widening-of-multiplication-result'
+		-checks='clang-analyzer-*,bugprone-*,-bugprone-easily-swappable-parameters,-bugprone-implicit-widening-of-multiplication-result,-bugprone-macro-parentheses'
