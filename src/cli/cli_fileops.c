@@ -92,13 +92,20 @@ plainsight_error plainsight_cli_write_all_fd(int file_descriptor, const uint8_t 
 }
 
 plainsight_error plainsight_cli_commit_temp_output_exclusive(const char *temp_path, const char *final_path) {
+    char expanded_final_path[PLAINSIGHT_MAX_PATH_BYTES];
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
+
     if (temp_path == NULL || final_path == NULL) {
         return PLAINSIGHT_ERR_ARGS;
+    }
+    result_code = plainsight_io_expand_home_path(final_path, expanded_final_path, sizeof(expanded_final_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
     }
 
     // link is the atomic "create final only if it does not exist" operation
     // This closes the stat-then-rename race that could overwrite another writer's file
-    if (link(temp_path, final_path) != 0) {
+    if (link(temp_path, expanded_final_path) != 0) {
         return PLAINSIGHT_ERR_IO;
     }
 
@@ -117,13 +124,20 @@ plainsight_error plainsight_cli_open_temp_output_exclusive(const char *final_pat
                                            char *temp_path,
                                            size_t temp_cap,
                                            int *file_descriptor_out) {
+    char expanded_final_path[PLAINSIGHT_MAX_PATH_BYTES];
     int exists_flag = 0;
     size_t path_len = 0u;
     size_t index = 0u;
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
 
     if (final_path == NULL || temp_path == NULL || file_descriptor_out == NULL) {
         return PLAINSIGHT_ERR_ARGS;
     }
+    result_code = plainsight_io_expand_home_path(final_path, expanded_final_path, sizeof(expanded_final_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
+    final_path = expanded_final_path;
 
     // Overwrite is refused so automation cannot accidentally destroy output files
     if (plainsight_cli_path_exists(final_path, &exists_flag) != PLAINSIGHT_OK) {

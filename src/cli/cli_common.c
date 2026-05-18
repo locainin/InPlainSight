@@ -75,55 +75,67 @@ plainsight_embed_method plainsight_cli_parse_method(const char *method_text, pla
 }
 
 plainsight_error plainsight_cli_load_image(const char *path, plainsight_image *image) {
+    char expanded_path[PLAINSIGHT_MAX_PATH_BYTES];
     plainsight_image_format format = PLAINSIGHT_IMAGE_FORMAT_UNKNOWN;
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
 
     if (path == NULL || image == NULL) {
         return PLAINSIGHT_ERR_ARGS;
+    }
+    result_code = plainsight_io_expand_home_path(path, expanded_path, sizeof(expanded_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
     }
 
     // Extension determines backend to avoid ambiguous magic probing
     // Lossy formats are accepted as inputs but not safe as stego outputs
     format = plainsight_image_detect_format_from_path(path);
     if (format == PLAINSIGHT_IMAGE_FORMAT_PNG) {
-        return plainsight_image_png_read(path, image);
+        return plainsight_image_png_read(expanded_path, image);
     }
     if (format == PLAINSIGHT_IMAGE_FORMAT_JXL) {
-        return plainsight_image_jxl_read(path, image);
+        return plainsight_image_jxl_read(expanded_path, image);
     }
     if (format == PLAINSIGHT_IMAGE_FORMAT_BMP) {
-        return plainsight_image_bmp_read(path, image);
+        return plainsight_image_bmp_read(expanded_path, image);
     }
     if (format == PLAINSIGHT_IMAGE_FORMAT_PPM) {
-        return plainsight_image_ppm_read(path, image);
+        return plainsight_image_ppm_read(expanded_path, image);
     }
     if (format == PLAINSIGHT_IMAGE_FORMAT_JPEG) {
-        return plainsight_image_jpeg_read(path, image);
+        return plainsight_image_jpeg_read(expanded_path, image);
     }
     if (format == PLAINSIGHT_IMAGE_FORMAT_WEBP) {
-        return plainsight_image_webp_read(path, image);
+        return plainsight_image_webp_read(expanded_path, image);
     }
     return PLAINSIGHT_ERR_UNSUPPORTED;
 }
 
 plainsight_error plainsight_cli_store_image(const char *path, const plainsight_image *image) {
+    char expanded_path[PLAINSIGHT_MAX_PATH_BYTES];
     plainsight_image_format format = PLAINSIGHT_IMAGE_FORMAT_UNKNOWN;
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
 
     if (path == NULL || image == NULL) {
         return PLAINSIGHT_ERR_ARGS;
     }
+    result_code = plainsight_io_expand_home_path(path, expanded_path, sizeof(expanded_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
 
     format = plainsight_image_detect_format_from_path(path);
     if (format == PLAINSIGHT_IMAGE_FORMAT_PNG) {
-        return plainsight_image_png_write(path, image);
+        return plainsight_image_png_write(expanded_path, image);
     }
     if (format == PLAINSIGHT_IMAGE_FORMAT_JXL) {
-        return plainsight_image_jxl_write(path, image);
+        return plainsight_image_jxl_write(expanded_path, image);
     }
     if (format == PLAINSIGHT_IMAGE_FORMAT_BMP) {
-        return plainsight_image_bmp_write(path, image);
+        return plainsight_image_bmp_write(expanded_path, image);
     }
     if (format == PLAINSIGHT_IMAGE_FORMAT_PPM) {
-        return plainsight_image_ppm_write(path, image);
+        return plainsight_image_ppm_write(expanded_path, image);
     }
     // Pixel-domain stego output must stay lossless to preserve embedded bits
     if (format == PLAINSIGHT_IMAGE_FORMAT_JPEG) {

@@ -46,7 +46,7 @@ APP_SRCS := \
 	src/image/image_webp.c
 
 CORE_SRCS := $(filter-out src/main.c,$(APP_SRCS))
-TEST_SRCS := tests/test_container.c tests/test_compress.c tests/test_crypto_kat.c tests/test_roundtrip.c tests/test_image_format.c tests/test_capacity.c tests/test_split_outer_v2.c tests/test_split_manifest.c tests/test_split_collect.c tests/test_split_plan.c tests/test_crypto_aad.c
+TEST_SRCS := tests/test_container.c tests/test_compress.c tests/test_crypto_kat.c tests/test_roundtrip.c tests/test_image_format.c tests/test_capacity.c tests/test_io.c tests/test_split_outer_v2.c tests/test_split_manifest.c tests/test_split_collect.c tests/test_split_plan.c tests/test_crypto_aad.c
 ALL_HEADERS := $(shell fd -e h . include src)
 ALL_C_SRCS := $(APP_SRCS) $(TEST_SRCS)
 RUST_UI_DIR := ui
@@ -118,6 +118,7 @@ GCC_SAN_TEST_BINS := \
 	$(BUILD_DIR)/gcc/sanitize/tests/test_roundtrip \
 	$(BUILD_DIR)/gcc/sanitize/tests/test_image_format \
 	$(BUILD_DIR)/gcc/sanitize/tests/test_capacity \
+	$(BUILD_DIR)/gcc/sanitize/tests/test_io \
 	$(BUILD_DIR)/gcc/sanitize/tests/test_split_outer_v2 \
 	$(BUILD_DIR)/gcc/sanitize/tests/test_split_manifest \
 	$(BUILD_DIR)/gcc/sanitize/tests/test_split_collect \
@@ -131,6 +132,7 @@ CLANG_SAN_TEST_BINS := \
 	$(BUILD_DIR)/clang/sanitize/tests/test_roundtrip \
 	$(BUILD_DIR)/clang/sanitize/tests/test_image_format \
 	$(BUILD_DIR)/clang/sanitize/tests/test_capacity \
+	$(BUILD_DIR)/clang/sanitize/tests/test_io \
 	$(BUILD_DIR)/clang/sanitize/tests/test_split_outer_v2 \
 	$(BUILD_DIR)/clang/sanitize/tests/test_split_manifest \
 	$(BUILD_DIR)/clang/sanitize/tests/test_split_collect \
@@ -213,6 +215,10 @@ $(BUILD_DIR)/gcc/sanitize/tests/test_capacity: $(BUILD_DIR)/gcc/sanitize/tests/t
 	@mkdir -p $(dir $@)
 	$(GCC) $(SAN_LDFLAGS) -o $@ $^
 
+$(BUILD_DIR)/gcc/sanitize/tests/test_io: $(BUILD_DIR)/gcc/sanitize/tests/test_io.o $(patsubst %.c,$(BUILD_DIR)/gcc/sanitize/%.o,src/error.c src/io.c)
+	@mkdir -p $(dir $@)
+	$(GCC) $(SAN_LDFLAGS) -o $@ $^
+
 $(BUILD_DIR)/gcc/sanitize/tests/test_split_outer_v2: $(BUILD_DIR)/gcc/sanitize/tests/test_split_outer_v2.o $(patsubst %.c,$(BUILD_DIR)/gcc/sanitize/%.o,src/error.c src/split/outer_v2.c)
 	@mkdir -p $(dir $@)
 	$(GCC) $(SAN_LDFLAGS) -o $@ $^
@@ -257,6 +263,10 @@ $(BUILD_DIR)/clang/sanitize/tests/test_capacity: $(BUILD_DIR)/clang/sanitize/tes
 	@mkdir -p $(dir $@)
 	$(CLANG) $(SAN_LDFLAGS) -o $@ $^
 
+$(BUILD_DIR)/clang/sanitize/tests/test_io: $(BUILD_DIR)/clang/sanitize/tests/test_io.o $(patsubst %.c,$(BUILD_DIR)/clang/sanitize/%.o,src/error.c src/io.c)
+	@mkdir -p $(dir $@)
+	$(CLANG) $(SAN_LDFLAGS) -o $@ $^
+
 $(BUILD_DIR)/clang/sanitize/tests/test_split_outer_v2: $(BUILD_DIR)/clang/sanitize/tests/test_split_outer_v2.o $(patsubst %.c,$(BUILD_DIR)/clang/sanitize/%.o,src/error.c src/split/outer_v2.c)
 	@mkdir -p $(dir $@)
 	$(CLANG) $(SAN_LDFLAGS) -o $@ $^
@@ -284,6 +294,7 @@ test-gcc: $(GCC_SAN_TEST_BINS)
 	$(BUILD_DIR)/gcc/sanitize/tests/test_roundtrip
 	$(BUILD_DIR)/gcc/sanitize/tests/test_image_format
 	$(BUILD_DIR)/gcc/sanitize/tests/test_capacity
+	$(BUILD_DIR)/gcc/sanitize/tests/test_io
 	$(BUILD_DIR)/gcc/sanitize/tests/test_split_outer_v2
 	$(BUILD_DIR)/gcc/sanitize/tests/test_split_manifest
 	$(BUILD_DIR)/gcc/sanitize/tests/test_split_collect
@@ -299,6 +310,7 @@ test-clang: $(CLANG_SAN_TEST_BINS)
 	$(BUILD_DIR)/clang/sanitize/tests/test_roundtrip
 	$(BUILD_DIR)/clang/sanitize/tests/test_image_format
 	$(BUILD_DIR)/clang/sanitize/tests/test_capacity
+	$(BUILD_DIR)/clang/sanitize/tests/test_io
 	$(BUILD_DIR)/clang/sanitize/tests/test_split_outer_v2
 	$(BUILD_DIR)/clang/sanitize/tests/test_split_manifest
 	$(BUILD_DIR)/clang/sanitize/tests/test_split_collect
@@ -351,7 +363,7 @@ clean:
 	rm -f $(PROJECT) $(PROJECT)-gcc-sanitize $(PROJECT)-clang $(PROJECT)-clang-release
 	rm -f compile_commands.json
 	rm -rf final
-	rm -f src/*.o src/*/*.o src/*/*/*.o tests/*.o tests/test_container tests/test_compress tests/test_crypto_kat tests/test_roundtrip tests/test_image_format tests/test_capacity tests/test_split_outer_v2 tests/test_split_manifest tests/test_split_collect tests/test_split_plan tests/test_crypto_aad
+	rm -f src/*.o src/*/*.o src/*/*/*.o tests/*.o tests/test_container tests/test_compress tests/test_crypto_kat tests/test_roundtrip tests/test_image_format tests/test_capacity tests/test_io tests/test_split_outer_v2 tests/test_split_manifest tests/test_split_collect tests/test_split_plan tests/test_crypto_aad
 
 deep-clean: clean
 	rm -f *.gcda *.gcno

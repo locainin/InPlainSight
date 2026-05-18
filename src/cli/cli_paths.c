@@ -63,15 +63,21 @@ static plainsight_error plainsight_cli_copy_text(const char *source_text,
 }
 
 plainsight_error plainsight_cli_path_exists(const char *path, int *exists_out) {
+    char expanded_path[PLAINSIGHT_MAX_PATH_BYTES];
     struct stat metadata;
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
 
     if (path == NULL || exists_out == NULL) {
         return PLAINSIGHT_ERR_ARGS;
     }
+    result_code = plainsight_io_expand_home_path(path, expanded_path, sizeof(expanded_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
 
     // stat is used instead of fopen so the check does not create files
     // This keeps "existence checks" side effect free
-    if (stat(path, &metadata) == 0) {
+    if (stat(expanded_path, &metadata) == 0) {
         *exists_out = 1;
         return PLAINSIGHT_OK;
     }
@@ -87,15 +93,21 @@ plainsight_error plainsight_cli_path_exists(const char *path, int *exists_out) {
 }
 
 plainsight_error plainsight_cli_path_is_directory(const char *path, int *is_directory_out) {
+    char expanded_path[PLAINSIGHT_MAX_PATH_BYTES];
     struct stat metadata;
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
 
     if (path == NULL || is_directory_out == NULL) {
         return PLAINSIGHT_ERR_ARGS;
     }
+    result_code = plainsight_io_expand_home_path(path, expanded_path, sizeof(expanded_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
 
     // Directory validation is used for split output and split extraction input
     // stat follows symlinks, which is acceptable for a local CLI tool
-    if (stat(path, &metadata) != 0) {
+    if (stat(expanded_path, &metadata) != 0) {
         return PLAINSIGHT_ERR_IO;
     }
 
@@ -107,25 +119,32 @@ plainsight_error plainsight_cli_join_dir_and_name(const char *dir_path,
                                   const char *file_name,
                                   char *out,
                                   size_t out_cap) {
+    char expanded_dir[PLAINSIGHT_MAX_PATH_BYTES];
     size_t dir_len = 0u;
     size_t name_len = 0u;
     size_t written = 0u;
     int needs_slash = 0;
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
 
     if (dir_path == NULL || file_name == NULL || out == NULL || out_cap == 0u) {
         return PLAINSIGHT_ERR_ARGS;
     }
+    result_code = plainsight_io_expand_home_path(dir_path, expanded_dir, sizeof(expanded_dir));
+    if (result_code != PLAINSIGHT_OK) {
+        // Preserve the exact path expansion failure for callers and tests
+        return result_code;
+    }
 
     // Manual length scan avoids extra libc helpers in the hot path
     // This function is used repeatedly in split modes
-    while (dir_path[dir_len] != '\0') {
+    while (expanded_dir[dir_len] != '\0') {
         dir_len++;
     }
     while (file_name[name_len] != '\0') {
         name_len++;
     }
 
-    needs_slash = (dir_len > 0u && dir_path[dir_len - 1u] != '/') ? 1 : 0;
+    needs_slash = (dir_len > 0u && expanded_dir[dir_len - 1u] != '/') ? 1 : 0;
 
     if (dir_len > SIZE_MAX - name_len) {
         // Overflow guard for dir + name length math
@@ -139,7 +158,7 @@ plainsight_error plainsight_cli_join_dir_and_name(const char *dir_path,
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
-    if (plainsight_cli_copy_text(dir_path, dir_len, out, out_cap, &written) != PLAINSIGHT_OK) {
+    if (plainsight_cli_copy_text(expanded_dir, dir_len, out, out_cap, &written) != PLAINSIGHT_OK) {
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
@@ -157,6 +176,7 @@ plainsight_error plainsight_cli_join_dir_and_name(const char *dir_path,
 }
 
 plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const plainsight_image *image) {
+    char expanded_final_path[PLAINSIGHT_MAX_PATH_BYTES];
     char temp_name[256];
     char temp_path[1024];
     size_t final_index = 0u;
@@ -174,6 +194,11 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
     if (final_path == NULL || image == NULL) {
         return PLAINSIGHT_ERR_ARGS;
     }
+    result_code = plainsight_io_expand_home_path(final_path, expanded_final_path, sizeof(expanded_final_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
+    final_path = expanded_final_path;
 
     // Refuse overwrite so callers can safely use atomic writes without clobbering existing outputs
     if (plainsight_cli_path_exists(final_path, &final_exists) != PLAINSIGHT_OK) {
