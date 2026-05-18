@@ -5,11 +5,16 @@ use super::live::wire_live_summary;
 use super::types::{DetailLabels, MetricLabels, PlanSummaryPanel, WarningLabels};
 use crate::app::app_types::{ExtractPanel, HidePanel};
 
+// Build the right-side inspector panel
+//
+// This panel summarizes selected inputs and log output. It does not own
+// preflight calculation, so it never decides split vs single-image output
 pub fn build_plan_summary_panel(
     hide_panel: &HidePanel,
     extract_panel: &ExtractPanel,
     log_buffer: &gtk::TextBuffer,
 ) -> PlanSummaryPanel {
+    // The inspector has a fixed width so the main workflow does not shift
     let container = gtk::Box::new(gtk::Orientation::Vertical, 12);
     container.add_css_class("inspector");
     container.set_width_request(430);
@@ -21,6 +26,7 @@ pub fn build_plan_summary_panel(
     let (details_card, detail_labels) = build_details_card();
     let (log_card, clear_log_button) = build_log_card(log_buffer);
 
+    // Cards are appended in the same order the user reads the plan
     container.append(&header);
     container.append(&warning_box);
     container.append(&metrics_grid);
@@ -28,6 +34,7 @@ pub fn build_plan_summary_panel(
     container.append(&details_card);
     container.append(&log_card);
 
+    // Live updates keep labels current without running the expensive preflight path
     wire_live_summary(
         hide_panel,
         extract_panel,
@@ -44,6 +51,7 @@ pub fn build_plan_summary_panel(
 }
 
 fn build_header() -> (gtk::Box, gtk::Label) {
+    // The state pill communicates readiness, not calculated capacity
     let header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     let title = gtk::Label::new(Some("Plan Summary"));
     title.add_css_class("inspector-title");
@@ -67,6 +75,7 @@ fn build_header() -> (gtk::Box, gtk::Label) {
 }
 
 fn build_warning_box(state_pill: gtk::Label) -> (gtk::Box, WarningLabels) {
+    // Warning text starts in a neutral pending state and is updated from form readiness
     let warning_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     warning_box.add_css_class("plan-warning");
     let warning_icon = gtk::Label::new(Some("!"));
@@ -93,6 +102,7 @@ fn build_warning_box(state_pill: gtk::Label) -> (gtk::Box, WarningLabels) {
     warning_box.append(&warning_copy);
 
     let labels = WarningLabels {
+        // Store label handles so live summary updates can avoid rebuilding the card
         state_pill,
         title,
         detail,
@@ -102,6 +112,7 @@ fn build_warning_box(state_pill: gtk::Label) -> (gtk::Box, WarningLabels) {
 }
 
 fn build_metrics_grid() -> (gtk::Grid, MetricLabels) {
+    // Metrics are compact because the inspector must fit beside every workflow step
     let metrics_grid = gtk::Grid::new();
     metrics_grid.add_css_class("metrics-grid");
     metrics_grid.set_column_spacing(0);
@@ -115,6 +126,7 @@ fn build_metrics_grid() -> (gtk::Grid, MetricLabels) {
     (
         metrics_grid,
         MetricLabels {
+            // Values are updated by live summary and later preflight-aware code paths
             payload: payload_value,
             capacity: capacity_value,
             shards: shard_value,
@@ -123,6 +135,7 @@ fn build_metrics_grid() -> (gtk::Grid, MetricLabels) {
 }
 
 fn build_what_happens_card() -> gtk::Box {
+    // This copy is invariant across single and split output plans
     let what_happens = gtk::Box::new(gtk::Orientation::Vertical, 8);
     what_happens.add_css_class("inspector-card");
     let what_title = gtk::Label::new(Some("What will happen"));
@@ -132,6 +145,7 @@ fn build_what_happens_card() -> gtk::Box {
     let bullet_two = gtk::Label::new(Some("* Extraction is authenticated and verified"));
     let bullet_three = gtk::Label::new(Some("* Lossless output is required for reliable recovery"));
     for bullet in [&bullet_one, &bullet_two, &bullet_three] {
+        // Bullets wrap so long strings do not expand the inspector
         bullet.add_css_class("bullet-label");
         bullet.set_xalign(0.0);
         bullet.set_wrap(true);
@@ -145,6 +159,7 @@ fn build_what_happens_card() -> gtk::Box {
 }
 
 fn build_details_card() -> (gtk::Box, DetailLabels) {
+    // Detail rows show the current form selections with middle ellipsis for paths
     let details_grid = gtk::Grid::new();
     details_grid.add_css_class("details-table");
     details_grid.set_column_spacing(0);
@@ -173,6 +188,7 @@ fn build_details_card() -> (gtk::Box, DetailLabels) {
     details_card.append(&details_title);
     details_card.append(&details_grid);
     let labels = DetailLabels {
+        // These labels are long-lived so signal handlers can update only the values
         cover: cover_value,
         payload: payload_value,
         plan: plan_value,
@@ -184,6 +200,7 @@ fn build_details_card() -> (gtk::Box, DetailLabels) {
 }
 
 fn build_log_card(log_buffer: &gtk::TextBuffer) -> (gtk::Box, gtk::Button) {
+    // The log shares the same buffer as execution so errors are visible in context
     let log_header = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     log_header.add_css_class("log-header");
     let log_title = gtk::Label::new(Some("Execution Log"));
@@ -197,6 +214,7 @@ fn build_log_card(log_buffer: &gtk::TextBuffer) -> (gtk::Box, gtk::Button) {
 
     let log_text_view = gtk::TextView::new();
     log_text_view.set_buffer(Some(log_buffer));
+    // The inspector log is read-only and non-focusable to avoid cursor jumps
     log_text_view.set_editable(false);
     log_text_view.set_cursor_visible(false);
     log_text_view.set_focusable(false);
@@ -217,6 +235,7 @@ fn build_log_card(log_buffer: &gtk::TextBuffer) -> (gtk::Box, gtk::Button) {
 }
 
 fn build_metric(label_text: &str, value_text: &str) -> (gtk::Box, gtk::Label) {
+    // Metric cells return only their value label because labels never change
     let box_widget = gtk::Box::new(gtk::Orientation::Vertical, 4);
     box_widget.add_css_class("metric-cell");
     box_widget.set_hexpand(true);
@@ -237,6 +256,7 @@ fn build_metric(label_text: &str, value_text: &str) -> (gtk::Box, gtk::Label) {
 }
 
 fn add_detail_row(grid: &gtk::Grid, row_index: i32, label_text: &str, value_label: &gtk::Label) {
+    // Detail rows use right-aligned values to scan like a property table
     let label = gtk::Label::new(Some(label_text));
     label.add_css_class("detail-key");
     label.set_xalign(0.0);
