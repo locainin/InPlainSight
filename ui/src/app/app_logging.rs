@@ -4,6 +4,7 @@ use gtk4 as gtk;
 use std::collections::HashMap;
 use std::ffi::OsString;
 
+use crate::app::app_ui_helpers::{set_status_fail, set_status_ready};
 use crate::command_builder::CommandExecution;
 
 #[derive(Clone, Copy)]
@@ -16,7 +17,7 @@ pub enum LogLevel {
 
 impl LogLevel {
     // Uppercase labels keep log scanning consistent across operations
-    fn as_text(self) -> &'static str {
+    const fn as_text(self) -> &'static str {
         match self {
             Self::Info => "INFO",
             Self::Success => "SUCCESS",
@@ -37,10 +38,7 @@ pub fn wire_clear_log_button(
 
     clear_logs_button.connect_clicked(move |_| {
         log_buffer_clone.set_text("");
-        status_label_clone.set_text("Log cleared");
-        status_label_clone.add_css_class("status-ready");
-        status_label_clone.remove_css_class("status-ok");
-        status_label_clone.remove_css_class("status-fail");
+        set_status_ready(&status_label_clone, "Log cleared");
     });
 }
 
@@ -49,7 +47,7 @@ pub fn render_command_result(
     operation_name: &str,
     status_label: &gtk::Label,
     log_buffer: &gtk::TextBuffer,
-    command_execution: CommandExecution,
+    command_execution: &CommandExecution,
 ) {
     let was_successful = command_execution.exit_code == Some(0);
     let status_text = if was_successful {
@@ -58,14 +56,10 @@ pub fn render_command_result(
         "Command failed"
     };
 
-    status_label.set_text(status_text);
-    status_label.remove_css_class("status-ready");
-    status_label.remove_css_class("status-ok");
-    status_label.remove_css_class("status-fail");
     if was_successful {
-        status_label.add_css_class("status-ok");
+        set_status_ready(status_label, status_text);
     } else {
-        status_label.add_css_class("status-fail");
+        set_status_fail(status_label, status_text);
     }
 
     append_structured_log(
@@ -199,7 +193,7 @@ pub fn render_cli_invocation_for_log(
         let substituted = replacements
             .get(raw_text.as_ref())
             .copied()
-            .unwrap_or(raw_text.as_ref());
+            .unwrap_or_else(|| raw_text.as_ref());
         rendered_parts.push(quote_for_log(substituted));
     }
 
@@ -209,15 +203,12 @@ pub fn render_cli_invocation_for_log(
 fn append_multiline_block(log_buffer: &gtk::TextBuffer, block_text: &str) {
     // Indent streamed process output to visually separate it from structured rows
     for line_text in block_text.lines() {
-        append_log_line(log_buffer, &format!("  {}", line_text));
+        append_log_line(log_buffer, &format!("  {line_text}"));
     }
 }
 
 fn format_exit_code(exit_code: Option<i32>) -> String {
-    match exit_code {
-        Some(code_value) => code_value.to_string(),
-        None => "signal".to_string(),
-    }
+    exit_code.map_or_else(|| "signal".to_string(), |code_value| code_value.to_string())
 }
 
 fn timestamp_seconds() -> String {
