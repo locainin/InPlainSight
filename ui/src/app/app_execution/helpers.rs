@@ -3,10 +3,7 @@ use std::path::Path;
 use gtk::prelude::*;
 use gtk4 as gtk;
 
-pub(crate) fn normalize_hide_output_path(
-    cover_path: &str,
-    output_path: &str,
-) -> Result<String, String> {
+pub fn normalize_hide_output_path(cover_path: &str, output_path: &str) -> Result<String, String> {
     // Whitespace-only output input is treated as empty so caller can decide defaults
     let trimmed_output = output_path.trim();
     if trimmed_output.is_empty() {
@@ -22,7 +19,7 @@ pub(crate) fn normalize_hide_output_path(
     let cover_extension = Path::new(cover_path)
         .extension()
         .and_then(|value| value.to_str())
-        .map(|value| value.to_ascii_lowercase())
+        .map(str::to_ascii_lowercase)
         .ok_or_else(|| {
             "cover image extension is required to infer output format (.png, .jxl, .bmp, .ppm, .jpg, .jpeg, .webp)"
                 .to_string()
@@ -43,17 +40,17 @@ pub(crate) fn normalize_hide_output_path(
     };
 
     // Return normalized value with inferred extension appended
-    Ok(format!("{}.{}", trimmed_output, inferred_extension))
+    Ok(format!("{trimmed_output}.{inferred_extension}"))
 }
 
-pub(crate) fn is_supported_lossless_output_extension(extension_text: &str) -> bool {
+pub fn is_supported_lossless_output_extension(extension_text: &str) -> bool {
     extension_text == "png"
         || extension_text == "jxl"
         || extension_text == "bmp"
         || extension_text == "ppm"
 }
 
-pub(crate) fn is_supported_input_cover_extension(extension_text: &str) -> bool {
+pub fn is_supported_input_cover_extension(extension_text: &str) -> bool {
     is_supported_lossless_output_extension(extension_text)
         || extension_text == "jpg"
         || extension_text == "jpeg"
@@ -61,7 +58,7 @@ pub(crate) fn is_supported_input_cover_extension(extension_text: &str) -> bool {
 }
 
 // Read text payload from text view and reject empty values
-pub(crate) fn extract_text_payload(payload_text_view: &gtk::TextView) -> Result<String, String> {
+pub fn extract_text_payload(payload_text_view: &gtk::TextView) -> Result<String, String> {
     // Read full text buffer from start to end for exact payload capture
     let payload_text_buffer = payload_text_view.buffer();
     let start_iter = payload_text_buffer.start_iter();

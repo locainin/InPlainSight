@@ -46,6 +46,7 @@ fn hide_split_arguments_match_expected_order() {
             "cover.png",
             "payload.bin",
             "out_dir",
+            "hidden_payload_%04u.png",
             "pass.txt",
             EmbedMethod::Lsb
         )),
@@ -59,6 +60,8 @@ fn hide_split_arguments_match_expected_order() {
             "auto",
             "--output-dir",
             "out_dir",
+            "--output-template",
+            "hidden_payload_%04u.png",
             "--passphrase-file",
             "pass.txt",
             "--method",
@@ -74,6 +77,7 @@ fn hide_split_arguments_match_expected_order() {
 fn extract_arguments_match_expected_order() {
     let extract_command = ExtractCommand {
         input_path: "stego.png".to_string(),
+        input_dir: None,
         output_path: "recovered.pdf".to_string(),
         passphrase_file_path: "pass.txt".to_string(),
         embed_method: EmbedMethod::Lsb,
@@ -85,6 +89,35 @@ fn extract_arguments_match_expected_order() {
             "extract",
             "--input",
             "stego.png",
+            "--output",
+            "recovered.pdf",
+            "--passphrase-file",
+            "pass.txt",
+            "--method",
+            "lsb"
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<String>>()
+    );
+}
+
+#[test]
+fn extract_split_folder_arguments_match_expected_order() {
+    let extract_command = ExtractCommand {
+        input_path: String::new(),
+        input_dir: Some("shards".to_string()),
+        output_path: "recovered.pdf".to_string(),
+        passphrase_file_path: "pass.txt".to_string(),
+        embed_method: EmbedMethod::Lsb,
+    };
+
+    assert_eq!(
+        os_args_to_strings(build_extract_arguments(&extract_command)),
+        vec![
+            "extract",
+            "--input-dir",
+            "shards",
             "--output",
             "recovered.pdf",
             "--passphrase-file",
