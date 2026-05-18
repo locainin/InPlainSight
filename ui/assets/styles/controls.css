@@ -1,0 +1,220 @@
+entry,
+passwordentry,
+textview,
+dropdown,
+.entry,
+.selector {
+  background-image: none;
+  min-height: var(--control-height);
+  background-color: var(--bg-input);
+  color: var(--text-main);
+  border: var(--stroke) solid var(--border-control);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  box-shadow: var(--shadow-control);
+}
+
+entry:hover,
+passwordentry:hover,
+textview:hover,
+dropdown:hover,
+.entry:hover,
+.selector:hover {
+  background-color: var(--bg-input);
+  border-color: var(--border-strong);
+}
+
+entry:focus,
+passwordentry:focus,
+textview:focus,
+dropdown:focus,
+entry:focus-within,
+passwordentry:focus-within,
+textview:focus-within,
+dropdown:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-ring), var(--shadow-control);
+}
+
+entry.field-invalid,
+passwordentry.field-invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft), var(--shadow-control);
+}
+
+textview text {
+  background-color: transparent;
+  color: var(--text-main);
+}
+
+entry selection,
+textview text selection {
+  background-color: var(--accent-soft);
+  color: var(--text-main);
+}
+
+entry:backdrop,
+passwordentry:backdrop,
+textview:backdrop,
+dropdown:backdrop,
+button:backdrop {
+  background-color: var(--bg-input);
+  color: var(--text-main);
+  border-color: var(--border-control);
+  box-shadow: var(--shadow-control);
+}
+
+window:backdrop,
+.app-root:backdrop,
+.app-body:backdrop,
+.main-body:backdrop,
+.content-shell:backdrop {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+}
+
+.titlebar:backdrop {
+  background-color: var(--bg-titlebar);
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+}
+
+dropdown button {
+  background-image: none;
+  min-height: var(--control-height);
+  background-color: var(--bg-input);
+  color: var(--text-main);
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+dropdown button:hover {
+  background-color: var(--bg-input);
+}
+
+button {
+  background-image: none;
+  min-height: var(--control-height);
+  min-width: var(--button-min-width);
+  border-radius: var(--radius-sm);
+  border: var(--stroke) solid var(--border-control);
+  padding: 7px 13px;
+  font-weight: 750;
+  box-shadow: var(--shadow-control);
+}
+
+button label,
+dropdown label {
+  color: inherit;
+}
+
+button.action,
+button.primary-cta {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+}
+
+button.action:hover,
+button.primary-cta:hover {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+button.action:active,
+button.primary-cta:active {
+  background-color: var(--accent-pressed);
+  border-color: var(--accent-pressed);
+}
+
+button.secondary,
+button.secondary-light,
+button.browse-button {
+  background-color: var(--bg-input);
+  color: var(--text-main);
+}
+
+button.secondary:hover,
+button.secondary-light:hover,
+button.browse-button:hover {
+  background-color: var(--bg-input);
+  border-color: var(--border-strong);
+}
+
+button:focus-visible {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-ring), var(--shadow-control);
+}
+
+button:disabled {
+  background-color: var(--bg-panel-muted);
+  border-color: var(--border-subtle);
+  color: var(--text-soft);
+  box-shadow: none;
+}
+
+button:disabled label {
+  color: var(--text-soft);
+}
+
+.field-block {
+  margin-top: 2px;
+}
+
+.field-row {
+  min-height: 46px;
+}
+
+.field-row entry {
+  margin-right: 6px;
+}
+
+.output-plan-card .field-row entry,
+.output-plan-card .field-row button {
+  min-height: 50px;
+}
+
+.payload-scroll {
+  border: var(--stroke) solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-input);
+}
+
+.payload-editor {
+  border: 0;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 10px;
+}
+
+popover {
+  background-color: var(--bg-panel-raised);
+  border: var(--stroke) solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+}
+
+popover contents {
+  background-color: var(--bg-panel-raised);
+  padding: 6px;
+}
+
+popover list,
+popover viewport {
+  background-color: transparent;
+}
+
+popover row {
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 7px;
+  color: var(--text-main);
+}
+
+popover row:hover,
+popover row:selected {
+  background-color: var(--bg-selected);
+  color: var(--text-main);
+}

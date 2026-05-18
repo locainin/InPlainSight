@@ -1,0 +1,86 @@
+.top-stepper {
+  min-height: 80px;
+  padding-bottom: 20px;
+  margin-bottom: 22px;
+  border-bottom: var(--stroke) solid var(--border-subtle);
+}
+
+button.stepper-button-v2 {
+  background-image: none;
+  min-width: 118px;
+  min-height: 58px;
+  margin: 0 8px;
+  padding: 0;
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+button.stepper-button-v2:hover {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.stepper-item {
+  min-width: 96px;
+}
+
+.stepper-number {
+  min-width: 42px;
+  min-height: 42px;
+  border-radius: 999px;
+  background-color: var(--bg-input);
+  border: var(--stroke) solid var(--border-control);
+  color: var(--text-muted);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.stepper-active .stepper-number,
+.stepper-number-active {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+  box-shadow: 0 0 22px rgba(37, 99, 235, 0.78);
+}
+
+.stepper-completed .stepper-number {
+  background-color: var(--bg-input);
+  border-color: var(--border-control);
+  color: var(--text-muted);
+}
+
+.stepper-label-row {
+  margin-top: 3px;
+}
+
+.stepper-label {
+  min-height: 18px;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.stepper-active .stepper-label {
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.stepper-checkmark {
+  opacity: 0;
+  color: var(--success);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.stepper-completed .stepper-checkmark {
+  opacity: 1;
+}
+
+.stepper-line {
+  min-width: 54px;
+  min-height: 2px;
+  margin-top: 21px;
+  background-color: var(--border-strong);
+  border-radius: 999px;
+}

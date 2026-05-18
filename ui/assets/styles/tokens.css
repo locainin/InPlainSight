@@ -1,0 +1,98 @@
+:root,
+.app-root.dark-mode {
+  --font-ui: "Inter", "SF Pro Text", "Cantarell", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", "Cascadia Mono", monospace;
+
+  --space-panel-x: 28px;
+  --space-panel-y: 24px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --stroke: 1px;
+  --control-height: 38px;
+  --button-min-width: 82px;
+  --sidebar-width: 188px;
+  --inspector-width: 430px;
+
+  --bg-app: #0b1220;
+  --bg-titlebar: #061f3f;
+  --bg-sidebar: #091424;
+  --bg-content: #0f1828;
+  --bg-inspector: #0b1020;
+  --bg-panel: #182335;
+  --bg-panel-raised: #1f2d41;
+  --bg-panel-muted: #162133;
+  --bg-input: #111a2a;
+  --bg-input-hover: #111a2a;
+  --bg-log: #060b17;
+  --bg-selected: #234a82;
+
+  --border-subtle: #26364d;
+  --border-strong: #3b4d67;
+  --border-control: #4b5f7a;
+  --border-focus: #60a5fa;
+
+  --text-main: #f4f7fb;
+  --text-muted: #b6c2d2;
+  --text-soft: #8fa0b7;
+  --text-inverse: #ffffff;
+  --text-on-accent: #ffffff;
+
+  --accent: #3b82f6;
+  --accent-hover: #5a96f8;
+  --accent-pressed: #2f6bd0;
+  --accent-soft: rgba(59, 130, 246, 0.18);
+  --accent-ring: rgba(96, 165, 250, 0.38);
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.13);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.14);
+  --danger: #fb7185;
+  --danger-soft: rgba(251, 113, 133, 0.14);
+
+  --shadow-soft: 0 14px 32px rgba(0, 0, 0, 0.22);
+  --shadow-control: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+}
+
+.app-root.light-mode {
+  --bg-app: #edf2f8;
+  --bg-titlebar: #fbfcfe;
+  --bg-sidebar: #f7f9fc;
+  --bg-content: #f5f8fc;
+  --bg-inspector: #eef4fb;
+  --bg-panel: #ffffff;
+  --bg-panel-raised: #ffffff;
+  --bg-panel-muted: #f0f5fb;
+  --bg-input: #ffffff;
+  --bg-input-hover: #f6f9fd;
+  --bg-log: #fbfdff;
+  --bg-selected: #dbeafe;
+
+  --border-subtle: #d7e0ec;
+  --border-strong: #b8c6d8;
+  --border-control: #aebdd0;
+  --border-focus: #2563eb;
+
+  --text-main: #111827;
+  --text-muted: #44546a;
+  --text-soft: #64748b;
+  --text-inverse: #ffffff;
+  --text-on-accent: #ffffff;
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-pressed: #1e40af;
+  --accent-soft: rgba(37, 99, 235, 0.12);
+  --accent-ring: rgba(37, 99, 235, 0.24);
+
+  --success: #059669;
+  --success-soft: rgba(5, 150, 105, 0.11);
+  --warning: #b45309;
+  --warning-soft: rgba(245, 158, 11, 0.15);
+  --danger: #e11d48;
+  --danger-soft: rgba(225, 29, 72, 0.11);
+
+  --shadow-soft: 0 16px 30px rgba(15, 23, 42, 0.08);
+  --shadow-control: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}

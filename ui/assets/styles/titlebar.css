@@ -1,0 +1,81 @@
+window,
+window.background,
+window.background.csd,
+window.csd,
+window > decoration,
+decoration,
+headerbar,
+windowhandle {
+  background-image: none;
+  background-color: var(--bg-titlebar);
+  color: var(--text-main);
+}
+
+window:backdrop,
+window.background:backdrop,
+window.background.csd:backdrop,
+window.csd:backdrop,
+window > decoration:backdrop,
+decoration:backdrop,
+headerbar:backdrop,
+windowhandle:backdrop {
+  background-image: none;
+  background-color: var(--bg-titlebar);
+  color: var(--text-main);
+}
+
+.titlebar {
+  background-image: none;
+  min-height: 36px;
+  background-color: var(--bg-titlebar);
+  border-bottom: var(--stroke) solid var(--border-subtle);
+  padding: 0 14px;
+}
+
+.titlebar:hover,
+.titlebar:focus,
+.titlebar:backdrop {
+  background-image: none;
+  background-color: var(--bg-titlebar);
+  color: var(--text-main);
+}
+
+.traffic-lights {
+  min-width: 132px;
+}
+
+.traffic-light {
+  min-width: 12px;
+  min-height: 12px;
+  margin: 0;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.14) inset;
+}
+
+.traffic-light.close {
+  background-color: #ff5f57;
+}
+
+.traffic-light.minimize {
+  background-color: #febc2e;
+}
+
+.traffic-light.zoom {
+  background-color: #28c840;
+}
+
+.window-title {
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.titlebar-tools {
+  min-width: 132px;
+}
+
+.titlebar-status {
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 650;
+}

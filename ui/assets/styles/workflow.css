@@ -1,0 +1,140 @@
+.workflow-panel {
+  background-color: var(--bg-content);
+  padding: var(--space-panel-y) var(--space-panel-x);
+}
+
+.workflow-page {
+  background-color: transparent;
+}
+
+.light-section {
+  margin-bottom: 20px;
+}
+
+.light-section-title {
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 850;
+  margin-bottom: 4px;
+}
+
+.cover-card {
+  min-height: 154px;
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-panel);
+  border: var(--stroke) solid var(--border-subtle);
+  box-shadow: var(--shadow-control);
+}
+
+.cover-preview-stack {
+  min-height: 154px;
+  background-color: var(--bg-panel-muted);
+}
+
+.cover-placeholder {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.cover-picture {
+  background-color: var(--bg-log);
+}
+
+.cover-details {
+  min-width: 280px;
+  padding: 22px;
+  border-left: var(--stroke) solid var(--border-subtle);
+}
+
+.file-name-title {
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.option-grid {
+  margin-top: 2px;
+}
+
+.option-field {
+  min-width: 160px;
+}
+
+.segmented-field {
+  margin-bottom: 2px;
+}
+
+.payload-file-card {
+  padding: 8px 10px;
+  min-height: 58px;
+  border-radius: var(--radius-md);
+  background-color: var(--bg-panel);
+  border: var(--stroke) solid var(--border-subtle);
+}
+
+.payload-file-top-row {
+  min-height: 44px;
+}
+
+.payload-file-icon {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 9px;
+  background-color: var(--accent-soft);
+  border: var(--stroke) solid var(--accent);
+  color: var(--accent-hover);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.payload-file-icon-pdf {
+  background-color: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.payload-file-title {
+  color: var(--text-main);
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.payload-file-meta {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.payload-path-expander {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.payload-path-label {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 0 0 0;
+}
+
+button.payload-change-button {
+  min-width: 76px;
+  min-height: 32px;
+}
+
+.passphrase-frame,
+.typed-passphrase-box,
+.text-mode-box {
+  background-color: transparent;
+}
+
+.action-row {
+  margin-top: 12px;
+}
+
+.final-action-row {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: var(--stroke) solid var(--border-subtle);
+}

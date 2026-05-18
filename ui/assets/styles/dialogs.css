@@ -1,0 +1,27 @@
+.modal-dialog {
+  background-color: var(--bg-panel-raised);
+  color: var(--text-main);
+  border: var(--stroke) solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.modal-dialog-card {
+  padding: 20px;
+}
+
+.modal-dialog-title {
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.modal-dialog-detail {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.modal-dialog-actions {
+  padding-top: 8px;
+}
