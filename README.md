@@ -1,132 +1,228 @@
 # InPlainSight
 
-InPlainSight is an educational steganography project written in C (CLI) with a Rust GTK4 UI.
+InPlainSight hides encrypted payload bytes inside lossless image files
 
-![InPlainSight Studio screenshot](assets/VisualDisplay.png)
+It has two interfaces:
 
-## Educational Scope
+- A C CLI that does the actual image, crypto, capacity, hide, and extract work
+- A Rust GTK4 app that provides a guided desktop workflow around the CLI
 
-- This project is for education, research, and security learning
-- It uses encryption so the payload stays a secret
-- It uses pixel-domain steganography to store those encrypted bytes inside an image
-- The Goal of this project was to be able to store text/PDFs within an image.
+![InPlainSight file selection](assets/readme-part-one.png)
 
-Two layers are involved:
+![InPlainSight output planning](assets/readme-part-two.png)
 
-- Cryptography is the lock: it protects confidentiality and makes edits obvious during extraction
-- Steganography is the actual hiding within the image: it decides where encrypted bytes live inside pixels so the file still looks like a normal image file
+## What LSB Means
 
-## Limitations (Read This First)
+LSB means least significant bit
 
-- Lossy re-encoding destroys pixel-domain stego
-  This is why output is kept lossless for embedding modes
-- Cover images have finite capacity
-  Large payloads may require splitting across multiple shard images
-- Dependencies may allocate internally
-  The project keeps memory bounded in its own code, but image/crypto libraries can still allocate
+In an image, each pixel channel is stored as a number. Changing the smallest bit of that number usually changes the color so little that it is hard to notice by eye. LSB steganography uses that small bit position to carry hidden data
 
-## How It Works (High Level)
+Example:
 
-1. Read the payload bytes (a file, or text from the UI)
-2. Derive keys from the passphrase (Argon2id)
-3. Encrypt and authenticate (XChaCha20-Poly1305)
-4. Derive an image-specific embedding seed from the passphrase and the cover pixels (with LSBs masked)
-5. Embed the encrypted container bytes into a lossless cover image (pixel-domain embedding)
-6. On extract: derive the same seed, pull bytes back out, verify authentication, then write the original bytes
-
-## CLI Usage
-
-### Plan Capacity Before Hiding
-
-`info` reports how much payload fits and whether splitting will be needed
-
-```bash
-./inplainsight info --cover cover.png --method lsb --lsb-bits 1 --density 1.0 --json
+```text
+original byte: 11010110
+hidden bit:    1
+new byte:      11010111
 ```
 
-### Hide (Single Output)
+Only the last bit changed
 
-```bash
+InPlainSight uses this idea, but it does not put raw payload data directly into pixels. The payload is first packed, encrypted, and authenticated. The encrypted container bits are then written into selected pixel bytes
+
+## How It Works
+
+Hide flow:
+
+1. Decode the cover image
+2. Read the payload as bytes
+3. Compress when it helps and the selected mode allows it
+4. Build a small metadata container
+5. Derive encryption keys from the passphrase
+6. Encrypt and authenticate the payload container
+7. Embed the encrypted container into pixel LSBs
+8. Write a lossless output image
+
+Extract flow:
+
+1. Decode the stego image or split image folder
+2. Read embedded container bytes from the pixel LSBs
+3. Derive keys from the passphrase
+4. Verify and decrypt the container
+5. Write the recovered payload bytes
+
+Wrong passphrases fail verification. Changed output images can also fail verification
+
+## Why Lossless Output Matters
+
+LSB data is fragile
+
+PNG, BMP, PPM, and lossless JPEG XL preserve the pixel bytes well enough for recovery. JPEG and most WebP usage are lossy, which means they can rewrite pixel values and destroy hidden bits
+
+That is why JPEG and WebP are accepted as cover inputs but not as stego outputs
+
+## Capacity And Split Output
+
+Capacity depends on the decoded cover image, selected LSB settings, container overhead, compression result, and payload size
+
+The user does not choose whether the payload uses one image or many. Preflight calculates what is physically possible:
+
+- If one image has enough room, one lossless output image is created
+- If one image does not have enough room, the payload is split across every required output image
+
+Every split output image is required for extraction
+
+## Supported Images
+
+Cover input:
+
+- `.png`
+- `.jxl`
+- `.bmp`
+- `.ppm`
+- `.jpg`
+- `.jpeg`
+- `.webp`
+
+Stego output:
+
+- `.png`
+- `.jxl`
+- `.bmp`
+- `.ppm`
+
+## Build
+
+Build the optimized CLI:
+
+```sh
+make
+```
+
+This writes `./inplainsight`
+
+Run full checks:
+
+```sh
+make check
+```
+
+`make check` runs C sanitizer builds, C tests, clang-tidy, Rust formatting, Rust clippy, and Rust tests
+
+Useful targets:
+
+```sh
+make gcc-sanitize
+make clang-sanitize
+make verify-c
+make verify-rust
+make clean
+```
+
+## Dependencies
+
+Required:
+
+- C11 compiler
+- `make`
+- `pkg-config`
+- `libsodium`
+- `libpng`
+- `libjpeg`
+- `libwebp`
+- `libzstd`
+
+Optional:
+
+- JPEG XL libraries for `.jxl` support
+- Rust and GTK4 development packages for the UI
+- `clang-tidy` and `intercept-build` for full C verification
+
+## CLI Examples
+
+Preflight a cover and payload:
+
+```sh
+./inplainsight info \
+  --cover ~/Pictures/cover.png \
+  --payload ~/Documents/payload.pdf \
+  --method lsb \
+  --lsb-bits 1 \
+  --density 1.0 \
+  --json
+```
+
+Hide in one image:
+
+```sh
 ./inplainsight hide \
-  --cover cover.png \
-  --payload payload.pdf \
-  --output stego.png \
-  --passphrase-file passphrase.txt \
+  --cover ~/Pictures/cover.png \
+  --payload ~/Documents/payload.pdf \
+  --output ~/Downloads/hidden_payload.png \
+  --passphrase-file ~/Documents/passphrase.txt \
+  --method lsb \
+  --compress auto
+```
+
+Hide across multiple images:
+
+```sh
+./inplainsight hide \
+  --cover ~/Pictures/cover.png \
+  --payload ~/Documents/payload.pdf \
+  --split auto \
+  --output-dir ~/Downloads/hidden_payload_images \
+  --output-template 'hidden_payload_part_%04u.png' \
+  --passphrase-file ~/Documents/passphrase.txt \
   --method lsb
 ```
 
-### Hide (Auto-Split Into Shards)
+Extract one image:
 
-Use this when a payload does not fit in one cover
-
-```bash
-./inplainsight hide \
-  --cover cover.png \
-  --payload payload.pdf \
-  --output stego.png \
-  --passphrase-file passphrase.txt \
-  --method lsb \
-  --split auto \
-  --output-dir stego_shards
-```
-
-### Extract (Single Image)
-
-```bash
+```sh
 ./inplainsight extract \
-  --input stego.png \
-  --output recovered_payload.bin \
-  --passphrase-file passphrase.txt \
-  --method auto
+  --input ~/Downloads/hidden_payload.png \
+  --output ~/Downloads/recovered_payload.pdf \
+  --passphrase-file ~/Documents/passphrase.txt \
+  --method lsb
 ```
 
-### Extract (Shard Directory)
+Extract split images:
 
-```bash
+```sh
 ./inplainsight extract \
-  --input-dir stego_shards \
-  --output recovered_payload.bin \
-  --passphrase-file passphrase.txt \
-  --method auto
+  --input-dir ~/Downloads/hidden_payload_images \
+  --output ~/Downloads/recovered_payload.pdf \
+  --passphrase-file ~/Documents/passphrase.txt \
+  --method lsb
 ```
 
-## What It Does
+`~/...` paths are accepted by the CLI and UI
 
-- Hides arbitrary bytes inside supported cover images
-- Uses authenticated encryption so extraction fails on tampering or wrong credentials
-- Restores the original payload bytes on successful extraction
-- Embeds data by modifying the least significant bits (LSBs) of pixel channel values (lossless output only)
+## UI
 
-## Supported Formats
+Run the GTK app:
 
-- Cover input: `.png`, `.jxl`, `.bmp`, `.ppm`, `.jpg`, `.jpeg`, `.webp`
-- Stego output: `.png`, `.jxl`, `.bmp`, `.ppm` (lossless only)
-
-## GUI (GTK4)
-
-The GUI is a guided workflow that runs the CLI under the hood and captures logs for troubleshooting
-
-```bash
+```sh
 cd ui
 cargo run
 ```
 
-Optional:
+The app follows the same pipeline as the CLI:
 
-- `INPLAINSIGHT_SKIP_CLI_BUILD=1` skips the C build step used by the UI build script
+1. Select files
+2. Run preflight
+3. Review the output plan
+4. Confirm and create output
 
-## Build Notes
+## Safety Notes
 
-- C dependencies: `libsodium`, `libpng`, `libjpeg`, `libwebp`, `libjxl` (optional at runtime, supported when installed)
-- This repo intentionally enforces strict compiler warnings and sanitizer builds during testing
+- Payload bytes are encrypted before embedding
+- Extraction verifies authentication before writing recovered bytes
+- Output paths refuse overwrites
+- Extracted payload files use private permissions
+- Passphrases can be typed in the UI without being written to disk
+- Generated split images must stay together and unchanged
 
-## Warnings / Ethics / Responsible Use
+## More Detail
 
-- This project is meant for learning and analysis, it is in no way meant for real-world use. 
-- It is not suggested to embed anything within an image to send to others. 
-
-The goal is to understand how these techniques work and how they are detected
-
-## More Details
-
-- [Technical design and module breakdown](docs/TECHNICAL.md)
+- [Technical notes](docs/TECHNICAL.md)
