@@ -2,7 +2,7 @@ use gtk::prelude::*;
 use gtk4 as gtk;
 
 // Build masked passphrase entry with reveal-eye support
-pub(crate) fn build_passphrase_text_entry() -> gtk::PasswordEntry {
+pub fn build_passphrase_text_entry() -> gtk::PasswordEntry {
     let entry_widget = gtk::PasswordEntry::new();
     // Shared class keeps typed passphrase visuals consistent across flows
     entry_widget.add_css_class("entry");
@@ -13,7 +13,7 @@ pub(crate) fn build_passphrase_text_entry() -> gtk::PasswordEntry {
 }
 
 // Build hide passphrase stack containing typed and file modes
-pub(crate) fn build_hide_passphrase_stack(
+pub fn build_hide_passphrase_stack(
     passphrase_file_container: &gtk::Box,
     passphrase_text_entry: &gtk::PasswordEntry,
     passphrase_confirm_entry: &gtk::PasswordEntry,
