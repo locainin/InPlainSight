@@ -11,6 +11,7 @@ use super::shared::{
 };
 use super::types::SingleOutputPlanWidgets;
 use crate::app::app_types::HidePanel;
+use crate::path_utils::expand_home_path;
 
 // Build the left side of the single-image plan view
 pub fn build_single_result_column(hide_panel: &HidePanel) -> (gtk::Box, SingleOutputPlanWidgets) {
@@ -202,7 +203,7 @@ fn build_cover_preview_picture(cover_entry: &gtk::Entry) -> gtk::Stack {
     let update_preview = Rc::new(move || {
         // GTK Picture can load the same local file path selected on step one
         let path_text = cover_entry_for_update.text().to_string();
-        let path_value = std::path::Path::new(path_text.trim());
+        let path_value = expand_home_path(&path_text);
         if path_value.is_file() {
             // Showing the real cover avoids misleading output previews
             let cover_file = gtk::gio::File::for_path(path_value);

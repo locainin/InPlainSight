@@ -2,6 +2,7 @@ use gtk::prelude::*;
 use gtk4 as gtk;
 
 use crate::command_builder::EmbedMethod;
+use crate::path_utils::compact_home_path;
 
 use super::app_logging::{LogLevel, append_structured_log};
 use super::app_types::{ExtractInputMode, FileFieldRow, HidePayloadMode, PassphraseMode};
@@ -208,9 +209,7 @@ fn handle_selected_file(
     picker_kind: &str,
 ) {
     if let Some(path_value) = file_value.path() {
-        context
-            .path_entry
-            .set_text(path_value.to_string_lossy().as_ref());
+        context.path_entry.set_text(&compact_home_path(&path_value));
         return;
     }
 

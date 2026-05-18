@@ -4,6 +4,7 @@ use gtk4 as gtk;
 use super::super::formatting::format_file_size;
 use super::pages::numbered_title;
 use crate::app::app_types::HidePanel;
+use crate::path_utils::expand_home_path;
 
 // Build the cover picker section and its live preview
 pub(super) fn build_cover_section(hide_panel: &HidePanel) -> gtk::Box {
@@ -81,9 +82,9 @@ pub(super) fn build_cover_section(hide_panel: &HidePanel) -> gtk::Box {
         let update_cover_preview = move || {
             // Metadata is display-only; real capacity still comes from preflight
             let path_text = cover_entry.text().to_string();
-            let path_value = std::path::Path::new(&path_text);
+            let path_value = expand_home_path(&path_text);
 
-            if let Ok(file_metadata) = std::fs::metadata(path_value) {
+            if let Ok(file_metadata) = std::fs::metadata(&path_value) {
                 // Use basename and extension so the preview stays readable at fixed width
                 let file_name = path_value
                     .file_name()
@@ -114,7 +115,7 @@ pub(super) fn build_cover_section(hide_panel: &HidePanel) -> gtk::Box {
 
             if path_value.is_file() {
                 // The actual selected cover image is shown here and reused on step three
-                let cover_file = gtk::gio::File::for_path(path_value);
+                let cover_file = gtk::gio::File::for_path(&path_value);
                 cover_picture_clone.set_file(Some(&cover_file));
                 preview_stack_clone.set_visible_child_name("picture");
             } else {

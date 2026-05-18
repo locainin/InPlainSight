@@ -9,6 +9,7 @@ use crate::app::app_fields::{
 };
 use crate::app::app_types::{FileFieldRow, HidePanel};
 use crate::command_builder::default_hide_output_path;
+use crate::path_utils::compact_home_path;
 
 pub fn build_hide_panel(
     window: &gtk::ApplicationWindow,
@@ -134,8 +135,12 @@ fn build_action_buttons(_payload_source_dropdown: &gtk::DropDown) -> (gtk::Butto
 }
 
 pub(super) fn default_split_output_dir() -> String {
-    std::env::var("HOME").map_or_else(
-        |_| "hidden_payload_images".to_string(),
-        |home_path| format!("{home_path}/Downloads/hidden_payload_images"),
+    std::env::var_os("HOME").map_or_else(
+        || "hidden_payload_images".to_string(),
+        |home_path| {
+            compact_home_path(
+                &std::path::PathBuf::from(home_path).join("Downloads/hidden_payload_images"),
+            )
+        },
     )
 }

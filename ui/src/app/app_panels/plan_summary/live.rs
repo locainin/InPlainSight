@@ -1,7 +1,7 @@
 use gtk::prelude::*;
 use gtk4 as gtk;
 
-use super::formatting::{basename_or_dash, payload_summary};
+use super::formatting::{basename_or_dash, compact_path_or_dash, payload_summary};
 use super::types::{DetailLabels, MetricLabels, SummarySources, WarningLabels};
 use crate::app::app_types::{ExtractPanel, HidePanel};
 
@@ -94,7 +94,7 @@ fn update_detail_labels(
     detail_labels.plan.set_text("Automatic preflight");
     detail_labels
         .output
-        .set_text(sources.output_entry.text().as_str());
+        .set_text(&compact_path_or_dash(sources.output_entry.text().as_str()));
     detail_labels
         .pattern
         .set_text(sources.pattern_entry.text().as_str());

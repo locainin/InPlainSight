@@ -1,3 +1,5 @@
+use crate::path_utils::{compact_home_text, expand_home_path};
+
 // Return a readable basename or a neutral placeholder for empty paths
 pub(super) fn basename_or_dash(path_text: &str) -> String {
     // Empty inputs should not look like real files in the side summary
@@ -6,7 +8,7 @@ pub(super) fn basename_or_dash(path_text: &str) -> String {
     }
 
     // Fall back to the original text when the platform path cannot expose a UTF-8 name
-    std::path::Path::new(path_text)
+    expand_home_path(path_text)
         .file_name()
         .and_then(|value| value.to_str())
         .unwrap_or(path_text)
@@ -20,17 +22,26 @@ pub(super) fn payload_summary(path_text: &str) -> String {
         return "-".to_string();
     }
 
-    let path_value = std::path::Path::new(path_text);
+    let path_value = expand_home_path(path_text);
     let name = path_value
         .file_name()
         .and_then(|value| value.to_str())
         .unwrap_or(path_text);
-    if let Ok(metadata) = std::fs::metadata(path_value) {
+    if let Ok(metadata) = std::fs::metadata(&path_value) {
         // File size is informational only; preflight still owns image-count math
         return format!("{} ({})", name, format_file_size(metadata.len()));
     }
 
     name.to_string()
+}
+
+pub(super) fn compact_path_or_dash(path_text: &str) -> String {
+    // Side summary paths use ~/ so screenshots do not expose the local account name
+    if path_text.trim().is_empty() {
+        return "-".to_string();
+    }
+
+    compact_home_text(path_text)
 }
 
 fn format_file_size(byte_count: u64) -> String {

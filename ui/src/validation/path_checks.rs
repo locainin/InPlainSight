@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use crate::path_utils::expand_home_path;
+
 // Shared non-empty check for path fields
 pub fn validate_required_path(path_value: &str, label: &str) -> Result<(), String> {
     if path_value.trim().is_empty() {
@@ -11,7 +13,7 @@ pub fn validate_required_path(path_value: &str, label: &str) -> Result<(), Strin
 
 // Require existing regular file for all input paths
 pub fn validate_existing_file(path_value: &str, label: &str) -> Result<(), String> {
-    let candidate_path = Path::new(path_value);
+    let candidate_path = expand_home_path(path_value);
     if !candidate_path.exists() {
         return Err(format!("{label} does not exist"));
     }
@@ -23,7 +25,7 @@ pub fn validate_existing_file(path_value: &str, label: &str) -> Result<(), Strin
 
 // Require an existing directory for folder-based CLI inputs
 pub fn validate_existing_directory(path_value: &str, label: &str) -> Result<(), String> {
-    let candidate_path = Path::new(path_value);
+    let candidate_path = expand_home_path(path_value);
     if !candidate_path.exists() {
         return Err(format!("{label} does not exist"));
     }
@@ -35,7 +37,7 @@ pub fn validate_existing_directory(path_value: &str, label: &str) -> Result<(), 
 
 // Output target must have a valid parent directory
 pub fn validate_output_parent_exists(path_value: &str, label: &str) -> Result<(), String> {
-    let output_path = Path::new(path_value);
+    let output_path = expand_home_path(path_value);
     let Some(parent_directory) = output_path.parent() else {
         return Err(format!("{label} has no parent directory"));
     };
