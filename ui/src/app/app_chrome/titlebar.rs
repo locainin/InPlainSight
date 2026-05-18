@@ -1,10 +1,13 @@
 use gtk::prelude::*;
 use gtk4 as gtk;
 
+// Build custom macOS-style titlebar chrome
 pub(in crate::app) fn build_titlebar(status_label: &gtk::Label) -> gtk::Box {
+    // The titlebar background is controlled by titlebar.css and should not shift on hover
     let bar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     bar.add_css_class("titlebar");
 
+    // Traffic lights are visual-only in GTK because the window manager owns actual controls
     let traffic_lights = gtk::Box::new(gtk::Orientation::Horizontal, 8);
     traffic_lights.add_css_class("traffic-lights");
     for class_name in ["close", "minimize", "zoom"] {
@@ -16,6 +19,7 @@ pub(in crate::app) fn build_titlebar(status_label: &gtk::Label) -> gtk::Box {
         traffic_lights.append(&light);
     }
 
+    // Center title uses expand so status tools can stay on the right
     let title = gtk::Label::new(Some("InPlainSight"));
     title.add_css_class("window-title");
     title.set_hexpand(true);

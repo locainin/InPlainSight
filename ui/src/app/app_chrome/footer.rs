@@ -1,7 +1,9 @@
 use gtk::prelude::*;
 use gtk4 as gtk;
 
+// Build the persistent footer with security posture and version text
 pub(in crate::app) fn build_footer() -> gtk::Box {
+    // Footer content is static so it can be created without extra state handles
     let footer = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     footer.add_css_class("footer");
 

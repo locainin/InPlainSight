@@ -12,7 +12,9 @@ use super::app_panels::{
 };
 use crate::command_builder::default_cli_binary_path;
 
+// Build and wire the full GTK application window
 pub fn build_ui(application: &gtk::Application) {
+    // Window sizing targets a desktop workflow while remaining scrollable on smaller screens
     let window = gtk::ApplicationWindow::builder()
         .application(application)
         .title("InPlainSight")
@@ -20,6 +22,7 @@ pub fn build_ui(application: &gtk::Application) {
         .default_height(720)
         .build();
 
+    // Shared state that crosses panels lives at the window level
     let log_buffer = gtk::TextBuffer::new(None);
     let hide_panel = build_hide_panel(&window, &log_buffer);
     let extract_panel = build_extract_panel(&window, &log_buffer);
@@ -27,6 +30,7 @@ pub fn build_ui(application: &gtk::Application) {
     let status_label = build_status_label();
     let theme_button = build_theme_button();
 
+    // Navigation, side summary, and execution hooks are wired after all widgets exist
     let workflow_stack = build_workflow_stack(
         &hide_panel,
         &extract_panel,
@@ -64,12 +68,14 @@ pub fn build_ui(application: &gtk::Application) {
     );
     wire_extract_execution(&extract_panel, &cli_path_entry, &status_label, &log_buffer);
 
+    // The hidden CLI path keeps command construction configurable without visible clutter
     root.append(&cli_path_entry);
     window.set_child(Some(&root));
     window.present();
 }
 
 fn build_hidden_cli_path_entry() -> gtk::Entry {
+    // The path entry is invisible but remains a normal GTK value source for command wiring
     let cli_path_entry = gtk::Entry::new();
     cli_path_entry.add_css_class("entry");
     cli_path_entry.set_text(&default_cli_binary_path());
@@ -78,6 +84,7 @@ fn build_hidden_cli_path_entry() -> gtk::Entry {
 }
 
 fn build_status_label() -> gtk::Label {
+    // The status label is intentionally width-limited to avoid titlebar/sidebar shifts
     let status_label = gtk::Label::new(None);
     status_label.set_markup("<span foreground='#10b981'>●</span>  Ready");
     status_label.add_css_class("sidebar-status");
@@ -89,6 +96,7 @@ fn build_status_label() -> gtk::Label {
 }
 
 fn build_theme_button() -> gtk::Button {
+    // Theme toggle lives in the sidebar so the titlebar stays visually stable
     let theme_button = gtk::Button::with_label("☀  Light");
     theme_button.add_css_class("sidebar-button");
     theme_button.add_css_class("sidebar-tool-link");
@@ -103,6 +111,7 @@ fn build_workflow_stack(
     status_label: &gtk::Label,
     log_buffer: &gtk::TextBuffer,
 ) -> gtk::Stack {
+    // The top-level stack switches product mode, while hide has its own step stack
     let hide_content = assemble_hide_card(hide_panel, cli_path_entry, status_label, log_buffer);
     let extract_content = assemble_extract_card(extract_panel);
     let workflow_stack = gtk::Stack::builder()
@@ -123,6 +132,7 @@ fn build_root_shell(
     sidebar: &gtk::Box,
     status_label: &gtk::Label,
 ) -> gtk::Box {
+    // Workflow and inspector scroll independently so logs never resize the main page
     let workflow_scroll = gtk::ScrolledWindow::new();
     workflow_scroll.add_css_class("light-workflow-scroll");
     workflow_scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
@@ -130,6 +140,7 @@ fn build_root_shell(
     workflow_scroll.set_hexpand(true);
     workflow_scroll.set_child(Some(workflow_stack));
 
+    // The inspector has a fixed width, which prevents dark/light mode layout drift
     let inspector_scroll = gtk::ScrolledWindow::new();
     inspector_scroll.add_css_class("inspector-scroll");
     inspector_scroll.set_hscrollbar_policy(gtk::PolicyType::Never);
@@ -158,6 +169,7 @@ fn build_root_shell(
     body.append(sidebar);
     body.append(&content);
 
+    // The titlebar is part of the app root for custom macOS-style window chrome
     let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
     root.add_css_class("app-root");
     root.add_css_class("dark-mode");
@@ -170,6 +182,7 @@ fn build_root_shell(
 }
 
 fn wire_theme_button(root: &gtk::Box, theme_button: &gtk::Button) {
+    // Theme state is local because persisted preferences are not part of this UI flow
     let light_mode_enabled = std::rc::Rc::new(std::cell::Cell::new(false));
     let root_clone = root.clone();
     let theme_button_clone = theme_button.clone();
@@ -177,11 +190,13 @@ fn wire_theme_button(root: &gtk::Box, theme_button: &gtk::Button) {
         let next_light_mode = !light_mode_enabled.get();
         light_mode_enabled.set(next_light_mode);
         if next_light_mode {
+            // Swap only theme classes so widget geometry stays unchanged
             root_clone.remove_css_class("dark-mode");
             root_clone.add_css_class("light-mode");
             theme_button_clone.set_label("☾  Dark");
             theme_button_clone.set_tooltip_text(Some("Switch to dark mode"));
         } else {
+            // Dark mode is the default visual design and uses the same layout metrics
             root_clone.remove_css_class("light-mode");
             root_clone.add_css_class("dark-mode");
             theme_button_clone.set_label("☀  Light");
