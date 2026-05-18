@@ -54,6 +54,7 @@ RUST_UI_DIR := ui
 WARN_FLAGS := -Wall -Wextra -Wformat=2 -Wconversion -Wshadow -Wpedantic -Wstrict-prototypes -Wmissing-prototypes -Werror
 SAN_FLAGS := -std=c11 -O2 -g -fno-omit-frame-pointer -fsanitize=address,undefined,leak -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fno-sanitize-recover=all $(WARN_FLAGS)
 REL_FLAGS := -std=c11 -Wall -Wextra -O3 -march=native -flto -DNDEBUG
+REL_LDFLAGS := -flto
 SAN_LDFLAGS := -fsanitize=address,undefined,leak
 CLANG_REL_FLAGS := -std=c11 -Wall -Wextra -O3 -march=native -DNDEBUG -flto=thin
 CLANG_REL_LDFLAGS := -fuse-ld=lld -flto=thin
@@ -136,7 +137,7 @@ CLANG_SAN_TEST_BINS := \
 	$(BUILD_DIR)/clang/sanitize/tests/test_split_plan \
 	$(BUILD_DIR)/clang/sanitize/tests/test_crypto_aad
 
-.PHONY: all clean deep-clean \
+.PHONY: all check clean deep-clean \
 	gcc-sanitize gcc-release clang-sanitize clang-release \
 	test-gcc test-clang build-tests-gcc build-tests-clang \
 	audit-gcc audit-clang verify-gcc verify-clang verify \
@@ -144,23 +145,25 @@ CLANG_SAN_TEST_BINS := \
 	rust-clean clean-all verify-all-clean \
 	compile-commands c-tidy verify-c
 
-all: gcc-sanitize
+all: gcc-release
 
-gcc-sanitize: $(PROJECT)
+check: verify-all
 
-gcc-release: $(PROJECT)-gcc-release
+gcc-sanitize: $(PROJECT)-gcc-sanitize
+
+gcc-release: $(PROJECT)
 
 clang-sanitize: $(PROJECT)-clang
 
 clang-release: $(PROJECT)-clang-release
 
-$(PROJECT): $(GCC_SAN_OBJS)
+$(PROJECT): $(GCC_REL_OBJS)
+	@mkdir -p $(dir $@)
+	$(GCC) $(REL_LDFLAGS) -o $@ $^ $(LDLIBS_COMMON)
+
+$(PROJECT)-gcc-sanitize: $(GCC_SAN_OBJS)
 	@mkdir -p $(dir $@)
 	$(GCC) $(SAN_LDFLAGS) -o $@ $^ $(LDLIBS_COMMON)
-
-$(PROJECT)-gcc-release: $(GCC_REL_OBJS)
-	@mkdir -p $(dir $@)
-	$(GCC) -o $@ $^ $(LDLIBS_COMMON)
 
 $(PROJECT)-clang: $(CLANG_SAN_OBJS)
 	@mkdir -p $(dir $@)
@@ -345,7 +348,7 @@ verify-all: verify-c verify-rust
 
 clean:
 	rm -rf $(BUILD_DIR)
-	rm -f $(PROJECT) $(PROJECT)-gcc-release $(PROJECT)-clang $(PROJECT)-clang-release
+	rm -f $(PROJECT) $(PROJECT)-gcc-sanitize $(PROJECT)-clang $(PROJECT)-clang-release
 	rm -f compile_commands.json
 	rm -rf final
 	rm -f src/*.o src/*/*.o src/*/*/*.o tests/*.o tests/test_container tests/test_compress tests/test_crypto_kat tests/test_roundtrip tests/test_image_format tests/test_capacity tests/test_split_outer_v2 tests/test_split_manifest tests/test_split_collect tests/test_split_plan tests/test_crypto_aad
