@@ -1,7 +1,9 @@
 use gtk::prelude::*;
 use gtk4 as gtk;
 
+// Build the large icon and explanatory copy at the top of step three
 pub fn build_output_plan_hero(icon: &gtk::Widget, title_text: &str, detail_text: &str) -> gtk::Box {
+    // The hero is intentionally not a card so it matches the concept hierarchy
     let plan_intro = gtk::Box::new(gtk::Orientation::Horizontal, 22);
     plan_intro.add_css_class("output-plan-hero");
 
@@ -25,6 +27,7 @@ pub fn build_output_plan_hero(icon: &gtk::Widget, title_text: &str, detail_text:
 }
 
 pub fn build_split_output_plan_icon() -> gtk::Widget {
+    // The split asset is bundled so the UI does not depend on runtime file paths
     build_embedded_image(
         include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -36,6 +39,7 @@ pub fn build_split_output_plan_icon() -> gtk::Widget {
 }
 
 pub fn build_single_output_plan_icon() -> gtk::Widget {
+    // Single-image success uses a separate asset to avoid reusing split language
     build_embedded_image(
         include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -51,8 +55,10 @@ pub fn build_embedded_image(
     class_name: &str,
     pixel_size: i32,
 ) -> gtk::Widget {
+    // Embedded bytes keep release builds self-contained
     let bytes = gtk::glib::Bytes::from_static(image_bytes);
     if let Ok(texture) = gtk::gdk::Texture::from_bytes(&bytes) {
+        // GTK Picture preserves raster/SVG scaling without custom drawing code
         let picture = gtk::Picture::for_paintable(&texture);
         picture.add_css_class(class_name);
         picture.set_content_fit(gtk::ContentFit::Contain);
@@ -65,6 +71,7 @@ pub fn build_embedded_image(
         return picture.upcast();
     }
 
+    // Fallback is deliberately plain because asset decode failure should be obvious
     let fallback = gtk::Label::new(Some("IMG"));
     fallback.add_css_class(class_name);
     fallback.upcast()

@@ -12,7 +12,9 @@ use super::shared::{
 use super::types::SingleOutputPlanWidgets;
 use crate::app::app_types::HidePanel;
 
+// Build the left side of the single-image plan view
 pub fn build_single_result_column(hide_panel: &HidePanel) -> (gtk::Box, SingleOutputPlanWidgets) {
+    // The column combines the calculated result, output path, and cover-change callout
     let column = gtk::Box::new(gtk::Orientation::Vertical, 10);
     column.set_hexpand(true);
 
@@ -30,6 +32,7 @@ pub fn build_single_result_column(hide_panel: &HidePanel) -> (gtk::Box, SingleOu
     result.add_css_class("output-plan-result-success");
     result.set_xalign(0.0);
 
+    // These labels are updated only after the CLI preflight returns real values
     let payload_size = build_metric_value_label("Pending");
     let capacity = build_metric_value_label("Pending");
     let images_required = build_metric_value_label("1");
@@ -74,6 +77,7 @@ pub fn build_single_result_column(hide_panel: &HidePanel) -> (gtk::Box, SingleOu
     let name_preview = gtk::Entry::new();
     name_preview.add_css_class("entry");
     name_preview.set_editable(false);
+    // The preview follows the output field while staying read-only in the plan
     wire_single_output_name_preview(&hide_panel.output_field.path_entry, &name_preview);
 
     output_card.append(&title);
@@ -96,10 +100,12 @@ pub fn build_single_result_column(hide_panel: &HidePanel) -> (gtk::Box, SingleOu
     (column, widgets)
 }
 
+// Build the right side of the single-image plan view
 pub fn build_single_details_column(
     hide_panel: &HidePanel,
     single_widgets: &SingleOutputPlanWidgets,
 ) -> gtk::Box {
+    // The details card mirrors the final generated image instead of offering choices
     let column = gtk::Box::new(gtk::Orientation::Vertical, 10);
     column.add_css_class("output-plan-single-details-column");
     column.set_hexpand(true);
@@ -117,6 +123,7 @@ pub fn build_single_details_column(
     let file_name = gtk::Label::new(Some("hidden_payload.png"));
     file_name.add_css_class("output-single-file-name");
     file_name.set_halign(gtk::Align::Center);
+    // File name text is derived from the selected output path
     wire_single_output_name_label(&hide_panel.output_field.path_entry, &file_name);
     let badge = gtk::Label::new(Some("Single-image output"));
     badge.add_css_class("green-pill");
@@ -163,6 +170,7 @@ pub fn build_single_details_column(
 }
 
 fn build_cover_preview_picture(cover_entry: &gtk::Entry) -> gtk::Stack {
+    // Step three reuses the selected cover preview instead of a generic icon
     let stack = gtk::Stack::new();
     stack.add_css_class("output-single-cover-preview-stack");
     stack.set_size_request(190, 136);
@@ -192,13 +200,16 @@ fn build_cover_preview_picture(cover_entry: &gtk::Entry) -> gtk::Stack {
     let cover_entry_for_signal = cover_entry.clone();
     let stack_for_update = stack.clone();
     let update_preview = Rc::new(move || {
+        // GTK Picture can load the same local file path selected on step one
         let path_text = cover_entry_for_update.text().to_string();
         let path_value = std::path::Path::new(path_text.trim());
         if path_value.is_file() {
+            // Showing the real cover avoids misleading output previews
             let cover_file = gtk::gio::File::for_path(path_value);
             picture.set_file(Some(&cover_file));
             stack_for_update.set_visible_child_name("picture");
         } else {
+            // Empty or stale paths fall back to neutral copy until a cover is selected
             picture.set_file(Option::<&gtk::gio::File>::None);
             stack_for_update.set_visible_child_name("placeholder");
         }

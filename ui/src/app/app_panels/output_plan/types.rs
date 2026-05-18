@@ -1,14 +1,19 @@
 use gtk4 as gtk;
 
+// All widgets needed after preflight are held together so wiring does not search the tree
 #[derive(Clone)]
 pub struct OutputPlanView {
+    // Root section for step three
     pub section: gtk::Box,
+    // Main action changes text after preflight knows the real image count
     pub cta_button: gtk::Button,
+    // Stack switches between split and single layouts
     pub mode_stack: gtk::Stack,
     pub split: SplitOutputPlanWidgets,
     pub single: SingleOutputPlanWidgets,
 }
 
+// Labels that preflight updates for the multi-image path
 #[derive(Clone)]
 pub struct SplitOutputPlanWidgets {
     pub result_label: gtk::Label,
@@ -22,6 +27,7 @@ pub struct SplitOutputPlanWidgets {
     pub file_rows: Vec<gtk::Box>,
 }
 
+// Labels that preflight updates for the one-image path
 #[derive(Clone)]
 pub struct SingleOutputPlanWidgets {
     pub result: gtk::Label,

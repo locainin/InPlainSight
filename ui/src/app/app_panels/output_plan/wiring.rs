@@ -14,6 +14,10 @@ use crate::command_builder::{
     CommandExecution, InfoCommand, build_info_arguments, run_cli_command,
 };
 
+// Wire the plan review button to the CLI preflight command
+//
+// The UI deliberately waits for the CLI result before declaring whether the
+// payload fits in one image or needs split output
 pub fn wire_review_plan_button(
     hide_panel: &HidePanel,
     output_plan_view: &OutputPlanView,
@@ -23,6 +27,7 @@ pub fn wire_review_plan_button(
     workflow_stack: &gtk::Stack,
     review_button: &gtk::Button,
 ) {
+    // Clone GTK handles before entering the signal closure
     let cover_entry = hide_panel.cover_field.path_entry.clone();
     let payload_file_entry = hide_panel.payload_file_field.path_entry.clone();
     let payload_source_dropdown = hide_panel.payload_source_dropdown.clone();
@@ -37,6 +42,7 @@ pub fn wire_review_plan_button(
     let review_button = review_button.clone();
 
     review_button.clone().connect_clicked(move |_| {
+        // Collect and validate only the fields needed by `inplainsight info`
         let plan_inputs = match collect_output_plan_inputs(
             &cover_entry,
             &payload_file_entry,
@@ -54,6 +60,7 @@ pub fn wire_review_plan_button(
 
         let cli_binary_path = cli_path_entry.text().to_string();
         let info_arguments = build_info_arguments(&plan_inputs);
+        // The log records the exact preflight command without exposing secret values
         append_structured_log(
             &log_buffer,
             "hide",
@@ -64,9 +71,11 @@ pub fn wire_review_plan_button(
             ),
         );
         set_status_pending(&status_label, "Running preflight planning...");
+        // Disable the button so duplicate preflight runs cannot race the UI state
         review_button.set_sensitive(false);
         review_button.set_label("Running Preflight");
 
+        // The callback owns the GTK updates and runs back on the main thread
         let output_plan_view_for_callback = output_plan_view.clone();
         let workflow_stack_for_callback = workflow_stack.clone();
         let status_label_for_callback = status_label.clone();
@@ -98,6 +107,7 @@ fn collect_output_plan_inputs(
     payload_text_view: &gtk::TextView,
     method_dropdown: &gtk::DropDown,
 ) -> Result<InfoCommand, String> {
+    // A cover is always required because capacity depends on the selected image
     let cover_path = cover_entry.text().trim().to_string();
     if cover_path.is_empty() {
         return Err("select a cover image before reviewing the output plan".to_string());
@@ -105,6 +115,7 @@ fn collect_output_plan_inputs(
 
     let (payload_path, payload_bytes) = match selected_payload_mode(payload_source_dropdown) {
         HidePayloadMode::File => {
+            // File payload mode sends a path so the CLI can inspect the real file
             let payload_path = payload_file_entry.text().trim().to_string();
             if payload_path.is_empty() {
                 return Err("select a payload before reviewing the output plan".to_string());
@@ -112,6 +123,8 @@ fn collect_output_plan_inputs(
             (Some(payload_path), None)
         }
         HidePayloadMode::Text => {
+            // Text payload mode sends only a byte count during planning
+            // Plaintext is not written to disk for the preflight screen
             let text_payload = extract_text_payload(payload_text_view)?;
             let payload_length = u64::try_from(text_payload.len())
                 .map_err(|_| "text payload is too large to plan".to_string())?;
@@ -136,12 +149,14 @@ fn handle_output_plan_preflight_result(
     review_button: &gtk::Button,
     output_pattern: &str,
 ) {
+    // Always restore the review button before handling success or failure
     review_button.set_sensitive(true);
     review_button.set_label("Review Plan");
 
     let info_execution = match preflight_result {
         Ok(value) => value,
         Err(error_text) => {
+            // Spawn failures happen before the CLI can return structured JSON
             set_status_error(status_label, "Preflight failed");
             append_structured_log(log_buffer, "hide", LogLevel::Error, &error_text);
             return;
@@ -149,6 +164,7 @@ fn handle_output_plan_preflight_result(
     };
 
     if info_execution.exit_code != Some(0) {
+        // A non-zero CLI exit means the JSON plan cannot be trusted
         set_status_error(status_label, "Preflight failed");
         append_structured_log(
             log_buffer,
@@ -165,12 +181,14 @@ fn handle_output_plan_preflight_result(
     let preflight_plan = match parse_hide_preflight_json(&info_execution) {
         Ok(value) => value,
         Err(error_text) => {
+            // Parse failures remain visible in the log for troubleshooting
             set_status_error(status_label, "Preflight JSON parse failed");
             append_structured_log(log_buffer, "hide", LogLevel::Error, &error_text.to_string());
             return;
         }
     };
 
+    // Only now does the UI know the real image count and capacity
     update_output_plan_view(output_plan_view, &preflight_plan, output_pattern);
     set_status_ready(status_label);
     workflow_stack.set_visible_child_name("review");
@@ -181,6 +199,7 @@ fn update_output_plan_view(
     preflight_plan: &HidePreflightPlan,
     output_pattern: &str,
 ) {
+    // The CLI plan chooses the visual branch; the GUI does not guess
     if preflight_plan.fits_single {
         update_single_output_plan(output_plan_view, preflight_plan);
         output_plan_view.mode_stack.set_visible_child_name("single");
@@ -200,6 +219,7 @@ fn update_split_output_plan(
     preflight_plan: &HidePreflightPlan,
     output_pattern: &str,
 ) {
+    // The CLI reports the required count; clamp only protects the layout from zero rows
     let required_shards = preflight_plan.required_shards.max(1u64);
     output_plan_view
         .split
@@ -225,6 +245,7 @@ fn update_split_output_plan(
         .file_count_label
         .set_text(&format!("{required_shards} files will be generated:"));
 
+    // The preview shows up to four rows so the panel height stays stable
     let visible_rows = usize::try_from(required_shards.min(4u64)).unwrap_or(4usize);
     for (index, row) in output_plan_view.split.file_rows.iter().enumerate() {
         row.set_visible(index < visible_rows);
@@ -243,6 +264,7 @@ fn update_single_output_plan(
     output_plan_view: &OutputPlanView,
     preflight_plan: &HidePreflightPlan,
 ) {
+    // Single-image plans keep the right panel focused on the one output file
     output_plan_view
         .single
         .result
@@ -263,6 +285,7 @@ fn update_single_output_plan(
 }
 
 fn estimate_shard_payload_size(preflight_plan: &HidePreflightPlan, index: usize) -> u64 {
+    // Estimated row sizes are display-only; execution still uses the CLI plan
     let shard_start = u64::try_from(index)
         .unwrap_or(u64::MAX)
         .saturating_mul(preflight_plan.max_payload_per_shard);

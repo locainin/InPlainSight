@@ -1,7 +1,12 @@
 use gtk::prelude::*;
 use gtk4 as gtk;
 
+// Shared builders for output-plan cards
+//
+// These helpers keep single and split plan modules focused on layout flow
+// instead of repeating the same metric, notice, and detail-row widgets
 pub fn build_metric_value_label(value_text: &str) -> gtk::Label {
+    // Metric values are right aligned so rows read like a compact table
     let label = gtk::Label::new(Some(value_text));
     label.add_css_class("output-plan-metric-value");
     label.set_xalign(1.0);
@@ -14,6 +19,7 @@ pub fn build_plan_metric_row(
     value_label: &gtk::Label,
     sublabel_text: Option<&str>,
 ) -> gtk::Box {
+    // One metric row holds the small icon, label copy, and live-updated value
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     row.add_css_class("output-plan-metric-row");
 
@@ -27,6 +33,7 @@ pub fn build_plan_metric_row(
     label.set_xalign(0.0);
     copy.append(&label);
     if let Some(sublabel) = sublabel_text {
+        // Sublabels clarify capacity values without adding another row
         let sublabel = gtk::Label::new(Some(sublabel));
         sublabel.add_css_class("muted-label");
         sublabel.set_xalign(0.0);
@@ -40,6 +47,7 @@ pub fn build_plan_metric_row(
 }
 
 pub fn build_single_success_notice() -> gtk::Box {
+    // Green success notices are used only when the CLI says one file is enough
     let notice = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     notice.add_css_class("output-plan-notice");
     notice.add_css_class("output-plan-success-notice");
@@ -68,6 +76,7 @@ pub fn build_single_success_notice() -> gtk::Box {
 }
 
 pub fn build_lossless_success_notice() -> gtk::Box {
+    // Lossless output is a recovery requirement, so it appears as a positive guarantee
     let notice = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     notice.add_css_class("output-plan-notice");
     notice.add_css_class("output-plan-success-notice");
@@ -90,6 +99,7 @@ pub fn build_lossless_success_notice() -> gtk::Box {
 }
 
 pub fn build_lossless_footer_notice() -> gtk::Box {
+    // Split plans use a smaller footer notice to avoid crowding the file list
     let notice = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     notice.add_css_class("output-plan-footer-notice");
     let icon = gtk::Label::new(Some("◆"));
@@ -106,6 +116,7 @@ pub fn build_lossless_footer_notice() -> gtk::Box {
 }
 
 pub fn build_change_cover_callout() -> gtk::Box {
+    // Cover changes happen by going back to step one, not by editing plan results
     let callout = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     callout.add_css_class("output-plan-change-callout");
     let icon = gtk::Label::new(Some("↗"));
@@ -127,6 +138,7 @@ pub fn build_change_cover_callout() -> gtk::Box {
 }
 
 pub fn build_detail_row(label_text: &str, value_text: &str) -> gtk::Box {
+    // Static detail rows are converted into label-backed rows for one code path
     let value = gtk::Label::new(Some(value_text));
     value.add_css_class("detail-label");
     value.set_xalign(1.0);
@@ -134,6 +146,7 @@ pub fn build_detail_row(label_text: &str, value_text: &str) -> gtk::Box {
 }
 
 pub fn build_detail_row_with_label(label_text: &str, value_label: &gtk::Label) -> gtk::Box {
+    // Dynamic detail rows receive the label handle owned by the caller
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     row.add_css_class("output-plan-detail-row");
     let label = gtk::Label::new(Some(label_text));
@@ -146,6 +159,7 @@ pub fn build_detail_row_with_label(label_text: &str, value_label: &gtk::Label) -
 }
 
 pub fn build_numbered_next_row(number_text: &str, detail_text: &str) -> gtk::Box {
+    // Numbered rows describe the deterministic execution sequence after confirmation
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     row.add_css_class("output-plan-next-row");
     let number = gtk::Label::new(Some(number_text));

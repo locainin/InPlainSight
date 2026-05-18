@@ -10,10 +10,12 @@ use super::split::{build_split_output_destination_card, build_split_output_plan_
 use super::types::{OutputPlanView, SingleOutputPlanWidgets, SplitOutputPlanWidgets};
 use crate::app::app_types::HidePanel;
 
+// Build the step-three output plan view with single and split branches
 pub fn build_output_plan_view(
     hide_panel: &HidePanel,
     workflow_stack: &gtk::Stack,
 ) -> OutputPlanView {
+    // The mode stack is switched only after preflight reports the real plan
     let section = gtk::Box::new(gtk::Orientation::Vertical, 0);
     section.add_css_class("light-section");
     section.add_css_class("output-plan-section");
@@ -26,6 +28,7 @@ pub fn build_output_plan_view(
         .build();
     let (split_section, split_widgets) = build_split_output_plan_section(hide_panel);
     let (single_section, single_widgets) = build_single_output_plan_section(hide_panel);
+    // Split is the initial child because it contains pending-safe copy and no false success
     mode_stack.add_named(&split_section, Some("split"));
     mode_stack.add_named(&single_section, Some("single"));
     mode_stack.set_visible_child_name("split");
@@ -35,6 +38,7 @@ pub fn build_output_plan_view(
     cta_button.add_css_class("primary-cta");
     let workflow_stack_clone = workflow_stack.clone();
     cta_button.connect_clicked(move |_| {
+        // Confirmation and passphrase entry happen on the final hide step
         workflow_stack_clone.set_visible_child_name("hide");
     });
 
@@ -50,6 +54,7 @@ pub fn build_output_plan_view(
 }
 
 fn build_split_output_plan_section(hide_panel: &HidePanel) -> (gtk::Box, SplitOutputPlanWidgets) {
+    // Split layout matches the concept: result card left, output location right
     let section = gtk::Box::new(gtk::Orientation::Vertical, 18);
     let output_grid = gtk::Box::new(gtk::Orientation::Horizontal, 20);
     output_grid.add_css_class("output-plan-grid");
@@ -58,6 +63,7 @@ fn build_split_output_plan_section(hide_panel: &HidePanel) -> (gtk::Box, SplitOu
     let (result_card, mut split_widgets) = build_split_output_plan_result_card();
     let (destination_card, file_count_label, file_name_labels, file_size_labels, file_rows) =
         build_split_output_destination_card(hide_panel);
+    // Store row handles so preflight can fill names, sizes, and visibility later
     split_widgets.file_count_label = file_count_label;
     split_widgets.file_name_labels = file_name_labels;
     split_widgets.file_size_labels = file_size_labels;
@@ -77,6 +83,7 @@ fn build_split_output_plan_section(hide_panel: &HidePanel) -> (gtk::Box, SplitOu
 }
 
 fn build_single_output_plan_section(hide_panel: &HidePanel) -> (gtk::Box, SingleOutputPlanWidgets) {
+    // Single layout keeps output path controls on the left and final image details on the right
     let section = gtk::Box::new(gtk::Orientation::Vertical, 18);
     let output_grid = gtk::Box::new(gtk::Orientation::Horizontal, 20);
     output_grid.add_css_class("output-plan-grid");

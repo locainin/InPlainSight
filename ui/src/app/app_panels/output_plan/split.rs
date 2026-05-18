@@ -9,7 +9,9 @@ use super::shared::{
 use super::types::SplitOutputPlanWidgets;
 use crate::app::app_types::HidePanel;
 
+// Build the result card for split-output plans
 pub fn build_split_output_plan_result_card() -> (gtk::Box, SplitOutputPlanWidgets) {
+    // Default text stays pending until preflight reports the actual shard count
     let card = gtk::Box::new(gtk::Orientation::Vertical, 14);
     card.add_css_class("output-plan-card");
     card.add_css_class("output-plan-result-card");
@@ -31,6 +33,7 @@ pub fn build_split_output_plan_result_card() -> (gtk::Box, SplitOutputPlanWidget
     let (notice, notice_title_label) = build_output_requirement_notice();
 
     card.append(&caption);
+    // Each metric row is updated from the parsed CLI preflight plan
     card.append(&result);
     card.append(&build_plan_metric_row(
         "FILE",
@@ -66,6 +69,7 @@ pub fn build_split_output_plan_result_card() -> (gtk::Box, SplitOutputPlanWidget
     (card, widgets)
 }
 
+// Build the output folder and generated-file preview card for split plans
 pub fn build_split_output_destination_card(
     hide_panel: &HidePanel,
 ) -> (
@@ -75,12 +79,14 @@ pub fn build_split_output_destination_card(
     Vec<gtk::Label>,
     Vec<gtk::Box>,
 ) {
+    // The preview rows are created once and retitled as the pattern changes
     let card = gtk::Box::new(gtk::Orientation::Vertical, 14);
     card.add_css_class("output-plan-card");
     card.add_css_class("output-plan-destination-card");
     card.set_hexpand(true);
     let (preview, preview_name_labels, preview_size_labels, preview_rows, file_count_label) =
         build_output_files_preview();
+    // Pattern edits update visible names immediately, while sizes wait for preflight
     wire_output_file_preview(
         &hide_panel.output_pattern_entry,
         preview_name_labels.clone(),
@@ -121,6 +127,7 @@ pub fn build_split_output_destination_card(
 }
 
 fn build_output_requirement_notice() -> (gtk::Box, gtk::Label) {
+    // Split output is a requirement, so the notice uses direct recovery language
     let notice = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     notice.add_css_class("output-plan-notice");
 
@@ -151,6 +158,7 @@ fn build_output_files_preview() -> (
     Vec<gtk::Box>,
     gtk::Label,
 ) {
+    // Four rows are enough to communicate the pattern without making the panel tall
     let preview = gtk::Box::new(gtk::Orientation::Vertical, 6);
     preview.add_css_class("output-files-preview");
 
@@ -171,6 +179,7 @@ fn build_output_files_preview() -> (
         "hidden_payload_part_0003.png",
         "hidden_payload_part_0004.png",
     ] {
+        // Row handles are stored so preflight can hide unused preview rows
         let (row, name_label, size_label) = build_output_file_preview_row(file_name);
         preview.append(&row);
         name_labels.push(name_label);
@@ -181,6 +190,7 @@ fn build_output_files_preview() -> (
 }
 
 fn build_output_file_preview_row(file_name: &str) -> (gtk::Box, gtk::Label, gtk::Label) {
+    // Each row uses a small image shard asset and live-updated file metadata
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
     row.add_css_class("output-file-preview-row");
     let icon = build_embedded_image(
