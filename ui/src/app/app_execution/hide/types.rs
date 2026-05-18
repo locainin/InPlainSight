@@ -3,7 +3,6 @@
 // GTK widgets are cloned and passed around by value in this module
 // Cloning GTK objects is cheap because it only bumps a reference count
 
-use gtk::prelude::*;
 use gtk4 as gtk;
 
 use crate::command_builder::HideCommand;
@@ -41,19 +40,15 @@ pub(super) struct HideExecutionInputs {
     pub(super) descriptor_guards: Vec<std::fs::File>,
     pub(super) payload_bytes: u64,
     pub(super) payload_is_regular_file: bool,
+    pub(super) output_dir: String,
+    pub(super) output_template: String,
 }
 
 // Status label styling is used in many branches, so keep it centralized
 pub(super) fn set_status_ready(status_label: &gtk::Label, text: &str) {
-    status_label.set_text(text);
-    status_label.add_css_class("status-ready");
-    status_label.remove_css_class("status-ok");
-    status_label.remove_css_class("status-fail");
+    crate::app::app_ui_helpers::set_status_ready(status_label, text);
 }
 
 pub(super) fn set_status_fail(status_label: &gtk::Label, text: &str) {
-    status_label.set_text(text);
-    status_label.remove_css_class("status-ready");
-    status_label.remove_css_class("status-ok");
-    status_label.add_css_class("status-fail");
+    crate::app::app_ui_helpers::set_status_fail(status_label, text);
 }
