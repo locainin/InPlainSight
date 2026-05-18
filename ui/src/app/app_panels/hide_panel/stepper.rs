@@ -1,7 +1,9 @@
 use gtk::prelude::*;
 use gtk4 as gtk;
 
+// Build the four-step progress control above the hide workflow
 pub(super) fn build_stepper(workflow_stack: &gtk::Stack) -> (gtk::Box, Vec<gtk::Button>) {
+    // Buttons are returned so the stack signal can mark active and completed steps
     let stepper = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     stepper.add_css_class("top-stepper");
     stepper.set_halign(gtk::Align::Center);
@@ -16,6 +18,7 @@ pub(super) fn build_stepper(workflow_stack: &gtk::Stack) -> (gtk::Box, Vec<gtk::
     ];
 
     for (index, (page_name, label_text)) in steps.iter().enumerate() {
+        // Each step is a button containing the number, label, and completion checkmark
         let step_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
         step_box.add_css_class("stepper-item");
 
@@ -46,13 +49,14 @@ pub(super) fn build_stepper(workflow_stack: &gtk::Stack) -> (gtk::Box, Vec<gtk::
         let page_name = (*page_name).to_string();
         let workflow_stack_clone = workflow_stack.clone();
         button.connect_clicked(move |_| {
+            // Direct step navigation is allowed; validation still gates execution
             workflow_stack_clone.set_visible_child_name(&page_name);
         });
 
         stepper.append(&button);
         step_buttons.push(button);
 
-        // Add connecting line if not last
+        // Connecting lines are decorative and never receive pointer events
         if index < steps.len() - 1 {
             let line = gtk::Box::new(gtk::Orientation::Horizontal, 0);
             line.add_css_class("stepper-line");
@@ -67,6 +71,7 @@ pub(super) fn build_stepper(workflow_stack: &gtk::Stack) -> (gtk::Box, Vec<gtk::
 }
 
 fn connect_stepper_state_v2(workflow_stack: &gtk::Stack, step_buttons: &[gtk::Button]) {
+    // Step classes are derived from the visible stack child instead of duplicated state
     let step_buttons = step_buttons.to_vec();
     workflow_stack.connect_visible_child_name_notify(move |stack| {
         let page_name = stack.visible_child_name().unwrap_or_else(|| "files".into());
@@ -78,6 +83,7 @@ fn connect_stepper_state_v2(workflow_stack: &gtk::Stack, step_buttons: &[gtk::Bu
         };
 
         for (i, button) in step_buttons.iter().enumerate() {
+            // Clear old classes first so back navigation restores the right appearance
             button.remove_css_class("stepper-active");
             button.remove_css_class("stepper-completed");
 
@@ -95,6 +101,7 @@ pub(super) fn go_to_step_button(
     page_name: &'static str,
     workflow_stack: &gtk::Stack,
 ) -> gtk::Button {
+    // Page buttons use the same stack names as the stepper
     let button = gtk::Button::with_label(label_text);
     button.add_css_class("action");
     let workflow_stack_clone = workflow_stack.clone();

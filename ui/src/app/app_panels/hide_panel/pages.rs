@@ -7,6 +7,7 @@ use super::stepper::go_to_step_button;
 use crate::app::app_panels::output_plan::{OutputPlanView, wire_review_plan_button};
 use crate::app::app_types::HidePanel;
 
+// Build the first workflow page where the user chooses cover and payload files
 pub(super) fn build_select_files_page(
     hide_panel: &HidePanel,
     workflow_stack: &gtk::Stack,
@@ -14,6 +15,7 @@ pub(super) fn build_select_files_page(
 ) -> gtk::Box {
     let page = build_workflow_page();
     let continue_button = go_to_step_button("Continue to Preflight", "preflight", workflow_stack);
+    // The first next button is disabled until the minimum file inputs exist
     wire_continue_to_preflight_state(hide_panel, &continue_button);
 
     page.append(&build_cover_section(hide_panel));
@@ -22,6 +24,7 @@ pub(super) fn build_select_files_page(
     page
 }
 
+// Build the preflight page and connect it to the output-plan review flow
 pub(super) fn build_preflight_page(
     hide_panel: &HidePanel,
     workflow_stack: &gtk::Stack,
@@ -34,6 +37,7 @@ pub(super) fn build_preflight_page(
     let page = build_workflow_page();
     let review_button = gtk::Button::with_label("Review Plan");
     review_button.add_css_class("action");
+    // Review Plan runs the CLI info command before step three is shown
     wire_review_plan_button(
         hide_panel,
         output_plan_view,
@@ -51,12 +55,14 @@ pub(super) fn build_preflight_page(
     page
 }
 
+// Build step three from the already-created output plan view
 pub(super) fn build_review_page(
     output_plan_view: &OutputPlanView,
     workflow_stack: &gtk::Stack,
     _step_buttons: &[gtk::Button],
 ) -> gtk::Box {
     let page = build_workflow_page();
+    // The output plan view owns single-image and split-image layouts
     page.append(&output_plan_view.section);
     page.append(&build_navigation_row(
         Some(go_to_step_button("Back", "preflight", workflow_stack)),
@@ -65,18 +71,21 @@ pub(super) fn build_review_page(
     page
 }
 
+// Build the final page where passphrase input and execution live
 pub(super) fn build_hide_execute_page(
     hide_panel: &HidePanel,
     workflow_stack: &gtk::Stack,
     _step_buttons: &[gtk::Button],
 ) -> gtk::Box {
     let page = build_workflow_page();
+    // Passphrase widgets stay on the final step so secrets are not shown earlier
     page.append(&build_passphrase_section(hide_panel));
     page.append(&build_hide_action_row(hide_panel, workflow_stack));
     page
 }
 
 fn build_workflow_page() -> gtk::Box {
+    // Every workflow page shares the same vertical spacing and CSS hook
     let page = gtk::Box::new(gtk::Orientation::Vertical, 14);
     page.add_css_class("workflow-page");
     page
@@ -86,9 +95,11 @@ fn build_navigation_row(
     back_button: Option<gtk::Button>,
     next_button: Option<gtk::Button>,
 ) -> gtk::Box {
+    // Navigation rows reserve left space for Back and right space for the primary action
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     row.add_css_class("action-row");
     if let Some(button) = back_button {
+        // Back buttons use secondary styling even when created by the step helper
         button.remove_css_class("action");
         button.add_css_class("secondary");
         row.append(&button);
@@ -103,6 +114,7 @@ fn build_navigation_row(
 }
 
 pub(super) fn numbered_title(number_text: &str, title_text: &str) -> gtk::Box {
+    // Numbered section titles keep the page content aligned with the stepper
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     let title_label = gtk::Label::new(Some(&format!("{number_text}. {title_text}")));
     title_label.add_css_class("light-section-title");
@@ -112,6 +124,7 @@ pub(super) fn numbered_title(number_text: &str, title_text: &str) -> gtk::Box {
 }
 
 fn build_payload_section(hide_panel: &HidePanel) -> gtk::Box {
+    // Payload widgets switch between file and text modes through their stack
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("light-section");
     section.append(&numbered_title("2", "Select a payload"));
@@ -124,6 +137,7 @@ fn build_payload_section(hide_panel: &HidePanel) -> gtk::Box {
 }
 
 fn build_preflight_options_section(hide_panel: &HidePanel) -> gtk::Box {
+    // Preflight exposes method selection but leaves image-count decisions to the CLI
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("light-section");
     section.append(&numbered_title("3", "Run preflight"));
@@ -155,6 +169,7 @@ fn build_preflight_options_section(hide_panel: &HidePanel) -> gtk::Box {
 }
 
 fn build_passphrase_section(hide_panel: &HidePanel) -> gtk::Box {
+    // File and typed passphrases share a stack so the run flow can resolve either mode
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("light-section");
     section.append(&numbered_title("4", "Hide payload"));
@@ -172,12 +187,14 @@ fn build_passphrase_section(hide_panel: &HidePanel) -> gtk::Box {
 }
 
 fn build_segmented_selector(label_text: &str, dropdown: &gtk::DropDown) -> gtk::Box {
+    // Segmented selectors are regular dropdowns with stronger visual grouping
     let box_widget = build_labeled_dropdown(label_text, dropdown);
     box_widget.add_css_class("segmented-field");
     box_widget
 }
 
 fn build_labeled_dropdown(label_text: &str, dropdown: &gtk::DropDown) -> gtk::Box {
+    // Labels are outside the dropdown so the active value remains uncluttered
     let box_widget = gtk::Box::new(gtk::Orientation::Vertical, 6);
     box_widget.add_css_class("option-field");
 
@@ -191,6 +208,7 @@ fn build_labeled_dropdown(label_text: &str, dropdown: &gtk::DropDown) -> gtk::Bo
 }
 
 fn build_hide_action_row(hide_panel: &HidePanel, workflow_stack: &gtk::Stack) -> gtk::Box {
+    // Final actions stay on one row to keep reset, preflight, and run choices clear
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     row.add_css_class("action-row");
     row.add_css_class("final-action-row");

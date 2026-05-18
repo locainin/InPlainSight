@@ -5,7 +5,9 @@ use super::super::formatting::format_file_size;
 use super::pages::numbered_title;
 use crate::app::app_types::HidePanel;
 
+// Build the cover picker section and its live preview
 pub(super) fn build_cover_section(hide_panel: &HidePanel) -> gtk::Box {
+    // The cover section owns only cover image presentation and metadata
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
     section.add_css_class("light-section");
     section.append(&numbered_title("1", "Select a cover image"));
@@ -14,6 +16,7 @@ pub(super) fn build_cover_section(hide_panel: &HidePanel) -> gtk::Box {
     cover_card.add_css_class("cover-card");
     cover_card.set_hexpand(true);
 
+    // The stack switches between a placeholder and the selected image preview
     let preview_stack = gtk::Stack::new();
     preview_stack.add_css_class("cover-preview-stack");
     preview_stack.set_hexpand(true);
@@ -32,6 +35,7 @@ pub(super) fn build_cover_section(hide_panel: &HidePanel) -> gtk::Box {
     preview_stack.add_named(&cover_picture, Some("picture"));
     preview_stack.set_visible_child_name("placeholder");
 
+    // Details stay beside the preview so the file path field can remain below the card
     let details_box = gtk::Box::new(gtk::Orientation::Vertical, 10);
     details_box.add_css_class("cover-details");
     details_box.set_width_request(300);
@@ -66,6 +70,7 @@ pub(super) fn build_cover_section(hide_panel: &HidePanel) -> gtk::Box {
     details_box.append(&lossless_badge);
 
     {
+        // The preview is updated from the same path entry used by command execution
         let cover_entry = hide_panel.cover_field.path_entry.clone();
         let preview_stack_clone = preview_stack.clone();
         let cover_picture_clone = cover_picture;
@@ -74,10 +79,12 @@ pub(super) fn build_cover_section(hide_panel: &HidePanel) -> gtk::Box {
         let meta_label_clone = meta_label;
 
         let update_cover_preview = move || {
+            // Metadata is display-only; real capacity still comes from preflight
             let path_text = cover_entry.text().to_string();
             let path_value = std::path::Path::new(&path_text);
 
             if let Ok(file_metadata) = std::fs::metadata(path_value) {
+                // Use basename and extension so the preview stays readable at fixed width
                 let file_name = path_value
                     .file_name()
                     .and_then(|value| value.to_str())
@@ -93,6 +100,7 @@ pub(super) fn build_cover_section(hide_panel: &HidePanel) -> gtk::Box {
                     format_file_size(file_metadata.len())
                 ));
                 let input_copy = if matches!(extension.as_str(), "JPG" | "JPEG" | "WEBP") {
+                    // Lossy inputs are accepted, but generated output remains lossless PNG
                     "lossy input accepted"
                 } else {
                     "lossless carrier input"
@@ -105,10 +113,12 @@ pub(super) fn build_cover_section(hide_panel: &HidePanel) -> gtk::Box {
             }
 
             if path_value.is_file() {
+                // The actual selected cover image is shown here and reused on step three
                 let cover_file = gtk::gio::File::for_path(path_value);
                 cover_picture_clone.set_file(Some(&cover_file));
                 preview_stack_clone.set_visible_child_name("picture");
             } else {
+                // Clearing the file removes the picture so stale previews are not shown
                 cover_picture_clone.set_file(Option::<&gtk::gio::File>::None);
                 preview_stack_clone.set_visible_child_name("placeholder");
             }
