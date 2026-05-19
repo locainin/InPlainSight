@@ -204,7 +204,7 @@ plainsight_error plainsight_embed_lsb_payload(uint8_t *cover,
     uint16_t minimum_texture_score = 0u;
     uint64_t permutation_step = 0u;
     uint64_t permutation_bias = 0u;
-    uint64_t permutation_index = 0u;
+    uint64_t permutation_index;
     uint64_t embedded_bit_count = 0u;
     unsigned int phase_index = 0u;
     plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
@@ -289,7 +289,7 @@ plainsight_error plainsight_extract_lsb_payload(const uint8_t *cover,
     uint16_t minimum_texture_score = 0u;
     uint64_t permutation_step = 0u;
     uint64_t permutation_bias = 0u;
-    uint64_t permutation_index = 0u;
+    uint64_t permutation_index;
     uint64_t observed_slot_count = 0u;
     uint64_t encoded_payload_length = 0u;
     uint64_t required_bit_count = 0u;

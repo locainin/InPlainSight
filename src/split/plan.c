@@ -40,8 +40,7 @@ plainsight_error plainsight_split_plan_compute(uint64_t payload_bytes,
     uint32_t shard_count = 0u;
     size_t manifest_len = 0u;
     uint64_t shard0_data_capacity = 0u;
-    uint64_t total_data_capacity = 0u;
-    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
+    uint64_t total_data_capacity;
 
     if (plan_out == NULL) {
         return PLAINSIGHT_ERR_ARGS;
@@ -66,6 +65,8 @@ plainsight_error plainsight_split_plan_compute(uint64_t payload_bytes,
     // shard_count growth is bounded by PLAINSIGHT_MAX_SHARDS, so the loop cannot run forever
     shard_count = 1u;
     while (1) {
+        plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
+
         result_code = plainsight_split_plan_manifest_len(shard_count, &manifest_len);
         if (result_code != PLAINSIGHT_OK) {
             return result_code;

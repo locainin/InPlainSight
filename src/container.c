@@ -192,7 +192,7 @@ plainsight_error plainsight_container_parse_inner(const uint8_t *in,
 
     total_metadata = (size_t)name_len + (size_t)mime_len;
 
-    if (header_size > in_len || total_metadata > (in_len - header_size)) {
+    if (total_metadata > (in_len - header_size)) {
         return PLAINSIGHT_ERR_BAD_FORMAT;
     }
 

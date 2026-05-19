@@ -26,8 +26,8 @@ static int check_true(int condition, const char *message_text) {
 int main(void) {
     // set_id ties a group of shards together and helps avoid mixing unrelated shard sets
     uint8_t set_id[PLAINSIGHT_SPLIT_SET_ID_BYTES];
-    uint32_t per_shard_plain_len[3] = {100u, 120u, 80u};
-    uint64_t per_shard_cipher_len[3] = {116u, 136u, 96u};
+    const uint32_t per_shard_plain_len[3] = {100u, 120u, 80u};
+    const uint64_t per_shard_cipher_len[3] = {116u, 136u, 96u};
     plainsight_split_manifest_view parsed_manifest;
     size_t packed_len = 0u;
     size_t index = 0u;

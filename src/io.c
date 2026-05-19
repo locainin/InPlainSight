@@ -22,7 +22,6 @@
 
 plainsight_error plainsight_io_expand_home_path(const char *path, char *out, size_t out_cap) {
     const char *home_path = NULL;
-    size_t home_len = 0u;
     size_t path_index = 0u;
     size_t out_index = 0u;
 
@@ -33,6 +32,8 @@ plainsight_error plainsight_io_expand_home_path(const char *path, char *out, siz
     // Only the current user's ~/ form is expanded
     // ~other remains literal because guessing another home path is not safe
     if (path[0] == '~' && (path[1] == '/' || path[1] == '\0')) {
+        size_t home_len = 0u;
+
         home_path = getenv("HOME");
         if (home_path == NULL || home_path[0] == '\0') {
             return PLAINSIGHT_ERR_ARGS;

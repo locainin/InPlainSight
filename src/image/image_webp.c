@@ -39,7 +39,7 @@ plainsight_error plainsight_image_webp_read(const char *path, plainsight_image *
     size_t input_length = 0u;
     uint64_t rgb_bytes = 0u;
     plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
-    uint8_t *decode_pointer = NULL;
+    const uint8_t *decode_pointer = NULL;
 
     if (path == NULL || image == NULL) {
         return PLAINSIGHT_ERR_ARGS;
@@ -92,11 +92,4 @@ plainsight_error plainsight_image_webp_read(const char *path, plainsight_image *
     image->data_len = (size_t)rgb_bytes;
 
     return PLAINSIGHT_OK;
-}
-
-plainsight_error plainsight_image_webp_write(const char *path, const plainsight_image *image) {
-    // Writing WebP is disabled because output can be lossy for pixel-domain stego
-    (void)path;
-    (void)image;
-    return PLAINSIGHT_ERR_UNSUPPORTED;
 }

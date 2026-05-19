@@ -155,9 +155,3 @@ plainsight_error plainsight_image_jpeg_read(const char *path, plainsight_image *
 
     return PLAINSIGHT_OK;
 }
-
-plainsight_error plainsight_image_jpeg_write(const char *path, const plainsight_image *image) {
-    (void)path;
-    (void)image;
-    return PLAINSIGHT_ERR_UNSUPPORTED;
-}

@@ -13,7 +13,6 @@ plainsight_error plainsight_split_collect_validate_set(const plainsight_split_ou
     uint8_t seen_index[PLAINSIGHT_MAX_SHARDS];
     uint32_t shard_count = 0u;
     size_t header_index = 0u;
-    size_t set_id_index = 0u;
     size_t seen_total = 0u;
     int saw_shard_zero = 0;
 
@@ -46,7 +45,7 @@ plainsight_error plainsight_split_collect_validate_set(const plainsight_split_ou
         }
 
         // set_id mismatch means these shards come from different runs
-        for (set_id_index = 0u; set_id_index < PLAINSIGHT_SPLIT_SET_ID_BYTES; set_id_index++) {
+        for (size_t set_id_index = 0u; set_id_index < PLAINSIGHT_SPLIT_SET_ID_BYTES; set_id_index++) {
             if (current_header->set_id[set_id_index] != expected_set_id[set_id_index]) {
                 return PLAINSIGHT_ERR_BAD_FORMAT;
             }
