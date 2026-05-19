@@ -50,13 +50,23 @@ static plainsight_error plainsight_cli_resolve_split_extract_output_path(const c
                                                                          size_t out_cap) {
     struct stat output_metadata;
     size_t path_len = 0u;
+    char expanded_output_path[PLAINSIGHT_MAX_PATH_BYTES];
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
 
     if (requested_output_path == NULL || payload_file_name == NULL || out == NULL || out_cap == 0u) {
         return PLAINSIGHT_ERR_ARGS;
     }
 
-    if (stat(requested_output_path, &output_metadata) == 0 && S_ISDIR(output_metadata.st_mode)) {
-        return plainsight_cli_join_dir_and_name(requested_output_path,
+    // Directory outputs may be entered as ~/..., so stat must see the expanded path
+    result_code = plainsight_io_expand_home_path(requested_output_path,
+                                        expanded_output_path,
+                                        sizeof(expanded_output_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
+
+    if (stat(expanded_output_path, &output_metadata) == 0 && S_ISDIR(output_metadata.st_mode)) {
+        return plainsight_cli_join_dir_and_name(expanded_output_path,
                                                payload_file_name,
                                                out,
                                                out_cap);
@@ -157,6 +167,7 @@ plainsight_error plainsight_cli_run_extract_split(const plainsight_extract_optio
     uint8_t shard_key[crypto_aead_xchacha20poly1305_ietf_KEYBYTES];
     uint64_t written_total = 0u;
     int output_fd = -1;
+    char expanded_input_dir[PLAINSIGHT_MAX_PATH_BYTES];
     char temp_output_path[1024];
     char resolved_output_path[1024];
     char recovered_payload_name[64];
@@ -179,6 +190,12 @@ plainsight_error plainsight_cli_run_extract_split(const plainsight_extract_optio
     }
     if (input_is_directory == 0) {
         return PLAINSIGHT_ERR_ARGS;
+    }
+    result_code = plainsight_io_expand_home_path(options->input_dir,
+                                        expanded_input_dir,
+                                        sizeof(expanded_input_dir));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
     }
 
     result_code = plainsight_io_read_passphrase_file(options->passphrase_path,
@@ -208,7 +225,8 @@ plainsight_error plainsight_cli_run_extract_split(const plainsight_extract_optio
         per_shard_cipher_len[index] = 0u;
     }
 
-    directory_handle = opendir(options->input_dir);
+    // opendir does not expand shell-style home paths, so use the validated real path
+    directory_handle = opendir(expanded_input_dir);
     if (directory_handle == NULL) {
         result_code = PLAINSIGHT_ERR_IO;
         goto cleanup;

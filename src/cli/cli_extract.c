@@ -80,14 +80,24 @@ static plainsight_error plainsight_cli_resolve_extract_output_path(const char *r
     size_t output_index = 0u;
     size_t dir_len = 0u;
     int has_directory = 0;
+    char expanded_output_path[PLAINSIGHT_MAX_PATH_BYTES];
     char output_dir[1024];
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
 
     if (requested_output_path == NULL || payload_name == NULL || out == NULL || out_cap == 0u) {
         return PLAINSIGHT_ERR_ARGS;
     }
 
-    if (stat(requested_output_path, &output_metadata) == 0 && S_ISDIR(output_metadata.st_mode)) {
-        return plainsight_cli_join_dir_and_name(requested_output_path, payload_name, out, out_cap);
+    // Directory detection must use the real path, while final display can keep ~/ text
+    result_code = plainsight_io_expand_home_path(requested_output_path,
+                                        expanded_output_path,
+                                        sizeof(expanded_output_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
+
+    if (stat(expanded_output_path, &output_metadata) == 0 && S_ISDIR(output_metadata.st_mode)) {
+        return plainsight_cli_join_dir_and_name(expanded_output_path, payload_name, out, out_cap);
     }
 
     while (requested_output_path[output_index] != '\0') {

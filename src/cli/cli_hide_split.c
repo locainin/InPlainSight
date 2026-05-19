@@ -103,6 +103,7 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
     size_t aad_len = 0u;
     size_t manifest_len = 0u;
     char template_text[128];
+    char expanded_payload_path[PLAINSIGHT_MAX_PATH_BYTES];
     char shard_name[256];
     char shard_path[1024];
     plainsight_split_outer_v2 outer_header;
@@ -133,6 +134,12 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
     // Payload size must be known up front for split planning
     // This prevents partial sets when the payload is longer than expected
     result_code = plainsight_io_get_regular_file_size(options->payload_path, &payload_file_size);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+    result_code = plainsight_io_expand_home_path(options->payload_path,
+                                        expanded_payload_path,
+                                        sizeof(expanded_payload_path));
     if (result_code != PLAINSIGHT_OK) {
         goto cleanup;
     }
@@ -320,7 +327,8 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
     }
 
     // Open payload once and read sequentially so memory stays bounded
-    payload_file_descriptor = open(options->payload_path, O_RDONLY | O_CLOEXEC);
+    // open does not expand ~/ paths, so use the same real path checked above
+    payload_file_descriptor = open(expanded_payload_path, O_RDONLY | O_CLOEXEC);
     if (payload_file_descriptor < 0) {
         result_code = PLAINSIGHT_ERR_IO;
         goto cleanup;
