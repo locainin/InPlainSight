@@ -158,8 +158,7 @@ plainsight_error plainsight_info_build_report(const plainsight_image *image,
             plainsight_split_plan split_plan;
             uint64_t payload_rounded = 0u;
 
-            // Ceiling division computes how many shards would be required
-            // This is planning-only for now until split mode is implemented
+            // Ceiling division handles the single-shard case before manifest-aware split planning
             if (payload_bytes > UINT64_MAX - (shard_capacity - 1u)) {
                 return PLAINSIGHT_ERR_TOO_LARGE;
             }
