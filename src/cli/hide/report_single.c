@@ -48,11 +48,18 @@ void plainsight_cli_hide_log_size_limits(uint64_t payload_file_size, uint64_t ma
       stderr);
 }
 
-void plainsight_cli_hide_log_preflight(const plainsight_info_report *report, uint64_t original_payload_bytes,
-                                       uint64_t effective_payload_bytes, uint8_t compression_mode) {
-  if (report == NULL) {
+void plainsight_cli_hide_log_preflight(const plainsight_info_report *report,
+                                       const plainsight_cli_hide_preflight_log_input *input) {
+  uint64_t original_payload_bytes = 0u;
+  uint64_t effective_payload_bytes = 0u;
+  uint8_t compression_mode = 0u;
+
+  if (report == NULL || input == NULL) {
     return;
   }
+  original_payload_bytes = input->original_payload_bytes;
+  effective_payload_bytes = input->effective_payload_bytes;
+  compression_mode = input->compression_mode;
 
   (void)fputs("hide preflight report\n", stderr);
   (void)fputs("  plan: single\n", stderr);

@@ -122,7 +122,10 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
     goto cleanup;
   }
 
-  result_code = plainsight_split_plan_compute(payload_file_size, per_shard_capacity, &split_plan);
+  {
+    plainsight_split_plan_input split_input = {payload_file_size, per_shard_capacity};
+    result_code = plainsight_split_plan_compute(&split_input, &split_plan);
+  }
   if (result_code != PLAINSIGHT_OK) {
     goto cleanup;
   }
@@ -155,9 +158,18 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
     goto cleanup;
   }
 
-  result_code = plainsight_info_build_report(
-      &g_cli_workspace.image, plainsight_image_detect_format_from_path(options->cover_path), 1u, 1000u,
-      payload_name_length, PLAINSIGHT_MIME_OCTET_STREAM_LEN, 1, payload_file_size, &info_report);
+  {
+    plainsight_info_report_input report_input = {
+        &g_cli_workspace.image,
+        plainsight_image_detect_format_from_path(options->cover_path),
+        1u,
+        1000u,
+        payload_name_length,
+        PLAINSIGHT_MIME_OCTET_STREAM_LEN,
+        1,
+        payload_file_size};
+    result_code = plainsight_info_build_report(&report_input, &info_report);
+  }
   if (result_code != PLAINSIGHT_OK) {
     goto cleanup;
   }
@@ -260,10 +272,19 @@ plainsight_error plainsight_cli_run_hide_split(const plainsight_hide_options *op
 
   // Pack shard 0 manifest once so the exact bytes are embedded
   // This avoids recomputing the manifest inside the shard loop and accidentally changing its length
-  result_code = plainsight_split_manifest_pack(
-      PLAINSIGHT_SPLIT_MANIFEST_VERSION, PLAINSIGHT_SPLIT_MANIFEST_FLAG_HAS_CIPHER_LEN, set_id,
-      payload_file_size, 0u, split_plan.chunk_plain_len, split_plan.shard_count, per_shard_plain_len,
-      per_shard_cipher_len, g_cli_workspace.inner, sizeof(g_cli_workspace.inner), &manifest_len);
+  {
+    plainsight_split_manifest_pack_input manifest_input = {PLAINSIGHT_SPLIT_MANIFEST_VERSION,
+                                                           PLAINSIGHT_SPLIT_MANIFEST_FLAG_HAS_CIPHER_LEN,
+                                                           set_id,
+                                                           payload_file_size,
+                                                           0u,
+                                                           split_plan.chunk_plain_len,
+                                                           split_plan.shard_count,
+                                                           per_shard_plain_len,
+                                                           per_shard_cipher_len};
+    result_code = plainsight_split_manifest_pack(&manifest_input, g_cli_workspace.inner,
+                                                 sizeof(g_cli_workspace.inner), &manifest_len);
+  }
   if (result_code != PLAINSIGHT_OK) {
     goto cleanup;
   }

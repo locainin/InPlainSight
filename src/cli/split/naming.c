@@ -143,15 +143,36 @@ static plainsight_error plainsight_cli_parse_template(const char *template_text,
   return PLAINSIGHT_OK;
 }
 
-static plainsight_error plainsight_cli_write_u32_padded(char *out, size_t out_cap, uint32_t value,
-                                                        unsigned int pad_width, size_t *written_out) {
+typedef struct plainsight_cli_padded_u32_output {
+  char *out;
+  size_t out_cap;
+  size_t *written_out;
+} plainsight_cli_padded_u32_output;
+
+typedef struct plainsight_cli_padded_u32_value {
+  uint32_t value;
+  unsigned int pad_width;
+} plainsight_cli_padded_u32_value;
+
+static plainsight_error plainsight_cli_write_u32_padded(const plainsight_cli_padded_u32_output *output,
+                                                        const plainsight_cli_padded_u32_value *input) {
   char reversed_digits[16];
   size_t digit_count = 0u;
   size_t out_index = 0u;
+  char *out = NULL;
+  size_t out_cap = 0u;
+  size_t *written_out = NULL;
+  uint32_t value = 0u;
+  unsigned int pad_width = 0u;
 
-  if (out == NULL || written_out == NULL) {
+  if (output == NULL || input == NULL || output->out == NULL || output->written_out == NULL) {
     return PLAINSIGHT_ERR_ARGS;
   }
+  out = output->out;
+  out_cap = output->out_cap;
+  written_out = output->written_out;
+  value = input->value;
+  pad_width = input->pad_width;
 
   if (value == 0u) {
     reversed_digits[digit_count++] = '0';
@@ -263,10 +284,14 @@ plainsight_error plainsight_cli_split_format_shard_filename(const char *template
     out[index] = template_text[index];
   }
 
-  if (plainsight_cli_write_u32_padded(out + prefix_len, out_cap - prefix_len, shard_index, pad_width,
-                                      &number_written) != PLAINSIGHT_OK) {
-    // Name overflow is treated as a hard error so output cannot be truncated
-    return PLAINSIGHT_ERR_TOO_LARGE;
+  {
+    plainsight_cli_padded_u32_output padded_output = {out + prefix_len, out_cap - prefix_len,
+                                                      &number_written};
+    plainsight_cli_padded_u32_value padded_value = {shard_index, pad_width};
+    if (plainsight_cli_write_u32_padded(&padded_output, &padded_value) != PLAINSIGHT_OK) {
+      // Name overflow is treated as a hard error so output cannot be truncated
+      return PLAINSIGHT_ERR_TOO_LARGE;
+    }
   }
 
   index = prefix_len + number_written;

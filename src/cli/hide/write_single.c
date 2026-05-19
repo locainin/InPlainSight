@@ -144,15 +144,27 @@ plainsight_error plainsight_cli_run_hide(const plainsight_hide_options *options)
     }
   }
 
-  result_code = plainsight_info_build_report(
-      &g_cli_workspace.image, plainsight_image_detect_format_from_path(options->cover_path), 1u, 1000u,
-      payload_name_length, sizeof(mime_octet_stream), 1, effective_payload_file_size, &info_report);
+  {
+    plainsight_info_report_input report_input = {
+        &g_cli_workspace.image,
+        plainsight_image_detect_format_from_path(options->cover_path),
+        1u,
+        1000u,
+        payload_name_length,
+        sizeof(mime_octet_stream),
+        1,
+        effective_payload_file_size};
+    result_code = plainsight_info_build_report(&report_input, &info_report);
+  }
   if (result_code != PLAINSIGHT_OK) {
     goto cleanup_without_secret;
   }
 
-  plainsight_cli_hide_log_preflight(&info_report, payload_file_size, effective_payload_file_size,
-                                    final_compression_mode);
+  {
+    plainsight_cli_hide_preflight_log_input preflight_log = {payload_file_size, effective_payload_file_size,
+                                                             final_compression_mode};
+    plainsight_cli_hide_log_preflight(&info_report, &preflight_log);
+  }
 
   // Cover-derived max payload reflects all container overhead in this run
   if (effective_payload_file_size > max_payload_by_cover) {
