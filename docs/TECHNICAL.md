@@ -1,375 +1,207 @@
-# InPlainSight Technical Notes
+# Technical Notes
 
-This document explains how InPlainSight works, from bytes on disk to the main modules.
+This file explains the implementation without repeating the source code
 
-## Scope
+## Shape
 
-- InPlainSight stores encrypted payload bytes inside image pixels
-- Cryptography keeps the payload secret and makes edits show up during extraction
-- Embedding is a way to store bytes and can still be spotted by analysis tools
+InPlainSight has one core pipeline:
 
-## Mental Model (Plain Language)
+- Decode image bytes into bounded project buffers
+- Pack payload metadata and payload bytes
+- Encrypt and authenticate the packed bytes
+- Embed the encrypted container into selected image bytes
+- Write only lossless stego output
 
-InPlainSight solves two different problems:
+The Rust UI does not implement steganography or crypto. It validates fields, builds CLI arguments, runs the C binary, and shows the CLI output plan
 
-- Keep the payload secret and detect changes
-- Put the encrypted bytes inside an image
+## Commands
 
-Those are handled by two separate layers:
+The CLI has three main commands:
 
-- The crypto layer turns plaintext into encrypted bytes and adds a change check
-  If the passphrase is wrong or the bytes were changed, decryption fails
-- The stego layer picks which pixel bytes carry the encrypted bits
-  This can avoid simple file-signature scanning, but it does not promise stealth
+- `info` decodes the cover and returns capacity planning JSON
+- `hide` creates one stego image or a split set
+- `extract` recovers one stego image or a split set
 
-Placement depends on the passphrase and the image.
-The seed is derived from the passphrase and the cover pixels, with each pixel byte masked to clear the LSB.
-Clearing the LSB keeps the seed stable even after embedding changes those bits.
+Path handling accepts `~/...` for the current user. The expansion is bounded in C by `PLAINSIGHT_MAX_PATH_BYTES` and mirrored in the UI for validation and display
 
-## Terminology (Simple)
+## Preflight
 
-- Passphrase: the secret text used to unlock the payload
-- Key: fixed-size secret bytes derived from the passphrase
-- Plaintext: the original bytes before encryption
-- Ciphertext: the encrypted bytes (what gets embedded)
-- Encrypt: make bytes unreadable without the key
-- Authenticate: detect whether bytes were changed
-- AEAD: encrypt + authenticate in one operation
-- KDF: a slow passphrase-to-key function
-- AAD: extra bytes that are not encrypted, but are still protected by the change check
-- Little-endian: multi-byte numbers stored low byte first
+Preflight lives in `src/info.c`
 
-## Repository Layout
+It calculates capacity from:
 
-Core C library and CLI:
+- decoded cover byte count
+- LSB bits per carrier byte
+- density
+- container overhead
+- payload name length
+- MIME length
+- payload size when one is provided
+- split manifest overhead when multiple shards are needed
 
-- `include/` public headers for the C components
-- `src/` implementation
-- `src/cli/` CLI parsing and workflows for hide/extract/info
-- `src/image/` image decode/encode backends
-- `src/embed/` pixel-domain embedding backends
-- `src/split/` split-shard container helpers
+The UI must not guess split status. It waits for `info --json` and uses the returned plan fields
 
-Rust GTK4 UI:
+## LSB Embedding
 
-- `ui/` GTK4 application that runs the CLI and parses `info --json` output
+The only implemented embed method is `lsb`
 
-Tests:
+The public enum leaves room for future methods, but the current parser and UI route to LSB. The technical behavior is in `src/embed/embed_lsb.c`
 
-- `tests/` C unit and integration tests
-- `tests/scripts/` regression runner and CLI audit scripts
+LSB embedding writes bits into the least significant bit of selected image bytes. The carrier order is deterministic:
 
-## Hard Limits
+- a stego subkey is derived from the passphrase
+- the cover bytes are hashed with their LSBs cleared
+- that hash becomes a placement seed
+- the seed drives a full permutation over candidate carrier bytes
+- a texture score changes slot priority without changing total capacity
 
-These limits keep memory and runtime under control on hostile inputs.
+Clearing the LSB before hashing keeps hide and extract aligned. The same cover should derive the same placement order before and after embedding
 
-Image limits (decoded):
+## Crypto
 
-- Max dimension: `PLAINSIGHT_MAX_IMAGE_DIMENSION` (8192)
-- Max decoded bytes: `PLAINSIGHT_MAX_IMAGE_BYTES` (64 MiB)
+Crypto lives in `src/crypto.c` and `include/crypto.h`
 
-Image limits (encoded file):
+The project does not expose a menu of encryption algorithms. The implementation uses libsodium for fixed primitives:
 
-- Max encoded bytes read/written: `PLAINSIGHT_MAX_IMAGE_FILE_BYTES` (64 MiB)
+- Argon2id for passphrase-based key derivation
+- XChaCha20-Poly1305 for authenticated encryption
+- libsodium random bytes for salts, nonces, and split set ids
+- libsodium KDF contexts for key separation
+- BLAKE2b through `crypto_generichash` for cover-bound placement seeds
 
-Memory model notes:
+Single-image hide derives one encryption subkey from the passphrase and a random salt. Split hide derives one master key, then derives a separate encryption key for each shard
 
-- `plainsight_image` does not allocate; callers provide a pixel buffer (`include/image/image.h`)
-- The CLI uses one shared RGB buffer in `g_cli_workspace` so pixel storage stays off the stack (`src/cli/cli_workspace.c`)
+The outer container stores KDF parameters so extraction can replay the same derivation. Extraction only accepts supported libsodium KDF algorithm ids and caps KDF cost before running it, so a modified carrier cannot request unreasonable memory or CPU work
 
-Payload and metadata:
-
-- Max payload bytes per container/shard: `PLAINSIGHT_MAX_PAYLOAD_BYTES` (8 MiB)
-- Max passphrase bytes: `PLAINSIGHT_MAX_PASSPHRASE_BYTES` (256)
-- Max filename bytes stored in inner metadata: `PLAINSIGHT_MAX_FILENAME_BYTES` (128)
-- Max mime bytes stored in inner metadata: `PLAINSIGHT_MAX_MIME_BYTES` (96)
-
-Split mode:
-
-- Max shards: `PLAINSIGHT_MAX_SHARDS` (1024)
-- Max total payload bytes (all shards): `PLAINSIGHT_MAX_TOTAL_PAYLOAD_BYTES` (512 MiB)
-- Max directory scan candidates: `PLAINSIGHT_MAX_SET_SCAN_IMAGES` (4096)
-
-## Crypto Overview
-
-Crypto uses libsodium (`include/crypto.h`, `src/crypto.c`).
-
-Notes:
-
-- The passphrase is run through a slow KDF so guessing costs time and RAM
-- The payload is encrypted so it cannot be read without the key
-- The payload is authenticated so edits are detected during extract
-
-Algorithms:
-
-- Passphrase KDF: Argon2id via `crypto_pwhash` (params stored in the outer header)
-- AEAD: XChaCha20-Poly1305 (IETF variant)
-- Subkeys: `crypto_kdf_derive_from_key` with fixed 8-byte context labels
-
-Key separation:
-
-- The passphrase-derived master key is not used directly for AEAD
-- Encryption keys are derived using explicit contexts so keys are not reused by accident
-- Split shards derive a different key per shard
-
-Integrity binding (AAD):
-
-- In split mode, the public shard header is serialized in one fixed layout
-- Those header bytes are passed as AEAD AAD during encrypt/decrypt
-- This prevents edits to shard index/count/length fields without detection
-
-## Pixel-Domain Embedding
-
-Embedding lives under `include/embed/embed.h` and `src/embed/`.
-
-Current backend:
-
-- `lsb` embeds one bit per selected cover byte by changing the least significant bit (LSB)
-
-Notes:
-
-- Pixel channels are stored as bytes (0 to 255)
-- The LSB is the last bit of the byte
-- Flipping the LSB changes a channel value by 1, which is often hard to notice in a normal photo
-
-Placement:
-
-- Slots are visited in a repeatable shuffle based on the seed
-- It tries higher-texture areas first, then uses the remaining slots
-- Texture scoring clears the LSB so the score does not change after embedding
-
-Length prefix:
-
-- The first 64 embedded bits store the embedded payload length in bytes (little-endian)
-- Payload bits follow immediately after the length prefix
-
-Channel stride:
-
-- The embed/extract API receives `cover_channel_stride`
-- This is the byte distance between two values from the same channel
-- In this project, decoded covers are normalized to RGB, so the stride is `3`
-
-Notes on detection:
-
-- LSB embedding changes the even/odd value of selected bytes
-- Bit-plane viewers and stats tests can often highlight these edits, especially on low-texture covers
-- Lossy re-encoding destroys pixel-domain LSB data, so output is restricted to lossless formats
-
-## Capacity Planning
-
-Capacity planning is shared by:
-
-- CLI hide preflight checks
-- `info --json` (used by the UI)
-
-Capacity math lives in `include/capacity.h` and `src/capacity.c`.
-
-Inputs:
-
-- decoded cover byte length
-- number of LSBs used per eligible cover byte (`--lsb-bits`)
-- density (`--density`), stored as per-mille (0..1000) to avoid floats
-- metadata lengths (name + mime), which consume capacity inside the encrypted container
-
-Notes:
-
-- `info` can model different `--density` values
-- `--lsb-bits` exists for future use and is currently fixed to `1`
-- The current hide/extract path embeds 1 bit per cover byte and uses full density
-
-Output:
-
-- usable cover bytes after density filtering
-- usable carrier bits
-- overhead bytes
-- max payload bytes that fit the cover before project cap clamping
+Wrong passphrases, modified ciphertext, modified authenticated metadata, or invalid container bytes all collapse to an authentication-style failure at the CLI boundary
 
 ## Containers
 
-InPlainSight uses a versioned container format that is encrypted and embedded.
+Single-image output uses container v1 from `src/container.c`
 
-There are two outer formats:
+The outer container is public framing. It carries:
 
-- Container v1: single-image payloads
-- Split outer v2: shard sets with an encrypted manifest in shard 0
+- magic bytes
+- version
+- KDF algorithm id
+- KDF operation limit
+- KDF memory limit
+- salt
+- nonce
+- ciphertext length
 
-### Container v1 (Single Image)
+The inner container is encrypted. It carries:
 
-Outer bytes are plaintext and exist to:
+- original payload length
+- payload file name
+- MIME bytes
+- compression mode
+- payload bytes
 
-- identify the format (magic + version)
-- carry KDF parameters and salt
-- carry AEAD nonce
-- carry ciphertext length so extraction knows how many bytes to pull
+Inner names are validated before packing and sanitized before extraction writes a recovered filename
 
-Notes:
+## Split Containers
 
-- The outer header is not encrypted, but it is embedded into pixels like everything else
-- The inner bytes and payload bytes are encrypted
+Split output uses split outer v2 from `src/split/outer_v2.c`
 
-The outer header is packed as:
+Every shard carries public split framing:
 
-- `magic[8]` = `HIICTR01`
-- `version[1]` = `1`
-- `reserved[1]` = `0`
-- `kdf_alg[2]` little-endian
-- `kdf_opslimit[8]` little-endian
-- `kdf_memlimit[8]` little-endian
-- `salt[16]`
-- `nonce[24]`
-- `ciphertext_len[8]` little-endian
-- `ciphertext[ciphertext_len]`
+- magic bytes and version
+- KDF parameters
+- salt
+- nonce
+- set id
+- shard index
+- shard count
+- ciphertext length
 
-The outer fixed length is `PLAINSIGHT_CONTAINER_OUTER_FIXED_BYTES` (76 bytes), followed by ciphertext.
+The public shard header is serialized as AEAD additional authenticated data. That means extraction can read it before decrypting, but decryption fails if it has been changed
 
-Inner bytes are plaintext before encryption and include:
+Shard 0 also carries an encrypted manifest. The manifest records the set id, total payload length, shard count, per-shard plaintext lengths, and per-shard ciphertext lengths. Extraction uses it to validate the complete set before writing recovered bytes
 
-- `payload_len[8]` little-endian
-- `name_len[2]` little-endian
-- `mime_len[2]` little-endian
-- `compression[1]` (currently must be 0)
-- `reserved[3]` must be 0
-- `name[name_len]`
-- `mime[mime_len]`
-- `payload[payload_len]`
+Filenames are not trusted for ordering. Shard headers and the manifest decide the set
 
-The inner bytes are encrypted and authenticated as a single AEAD message.
+## Compression
 
-### Split Outer v2 (Shard Sets)
+Compression uses zstd through `src/compress.c`
 
-Split outer headers are plaintext and exist to:
+Single-image hide can store:
 
-- identify a split shard (`magic + version`)
-- carry KDF params and salt for key derivation
-- carry nonce and ciphertext length for the shard AEAD
-- carry `set_id`, shard index, and shard count for assembly
+- no compression
+- zstd compression
+- automatic zstd trial compression
 
-The split outer AAD serializer includes:
+Automatic compression tries a small set of zstd levels and keeps the smallest result only when it is smaller than the original payload
 
-- `magic[8]` = `HIISPL02`
-- `version[1]` = `2`
-- `flags[1]`
-- `kdf_alg[2]` little-endian
-- `kdf_opslimit[8]` little-endian
-- `kdf_memlimit[8]` little-endian
-- `salt[16]`
-- `nonce[24]`
-- `set_id[16]`
-- `shard_index[4]` little-endian
-- `shard_count[4]` little-endian
-- `ciphertext_len[8]` little-endian
+Split hide currently rejects compression. Split payload bytes are read and encrypted in bounded chunks, which keeps memory use stable for larger payloads
 
-Those serialized bytes are used as AEAD AAD during encrypt/decrypt.
+## Memory Bounds
 
-Shard plaintext:
+The C code uses fixed project buffers for core data paths
 
-- Shard 0: `manifest_bytes || payload_chunk_0`
-- Shards 1..N-1: `payload_chunk_i`
+Important limits:
 
-#### Manifest (Encrypted, Shard 0)
+- `PLAINSIGHT_MAX_IMAGE_BYTES`
+- `PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES`
+- `PLAINSIGHT_MAX_SHARD_PLAINTEXT_BYTES`
+- `PLAINSIGHT_MAX_TOTAL_PAYLOAD_BYTES`
+- `PLAINSIGHT_MAX_SHARDS`
+- `PLAINSIGHT_MAX_PATH_BYTES`
+- `PLAINSIGHT_MAX_PASSPHRASE_BYTES`
 
-The manifest is inside shard 0 ciphertext and is not visible without a valid passphrase.
+External libraries can allocate internally. Project-owned buffers still enforce local bounds before data is packed, encrypted, embedded, or written
 
-Fields:
+## Output Safety
 
-- `magic[4]` = `HISM`
-- `manifest_version[1]` must be `PLAINSIGHT_SPLIT_MANIFEST_VERSION` (1)
-- `flags[1]` (fail-closed on unknown bits)
-- `reserved[2]` must be 0
-- `set_id[16]` (duplicated for integrity checks)
-- `total_plaintext_len[8]` (payload total, excluding manifest)
-- `compression_mode[1]` (reserved)
-- `reserved[3]` must be 0
-- `chunk_plain_len[4]`
-- `shard_count[4]`
-- `per_shard_plain_len[shard_count]` (u32 entries)
-- optional `per_shard_cipher_len[shard_count]` (u64 entries) when enabled by flags
+Output writes are conservative:
 
-Validation:
+- existing output files are refused
+- temp files are written next to the final path
+- final paths are committed only after successful writes
+- extracted payload files use private permissions
+- split output paths are preflighted before shard writes begin
 
-- fail-closed on unknown versions or flags
-- set_id and shard_count must match the outer headers
-- length sums must match `total_plaintext_len`
+This reduces overwrite risk and avoids leaving a partial split set when an output path is already occupied
 
-## Hide and Extract Workflows
+## UI
 
-### Hide (Single Image)
+The UI lives in `ui/src`
 
-High level:
+Main areas:
 
-1. Decode the cover image into a bounded RGB buffer
-2. Build inner bytes (metadata + payload)
-3. Derive encryption key and embedding seed
-4. AEAD-encrypt inner bytes into ciphertext
-5. Pack outer header + ciphertext into container bytes
-6. Embed container bytes into cover pixels
-7. Encode a lossless output image and write it crash-safe (write temp file, then rename, refuses overwrite)
+- `app_chrome` builds window chrome, sidebar, and footer
+- `app_panels` builds visible workflow panels
+- `app_execution` runs CLI operations and maps results back into the UI
+- `command_builder` builds CLI argument lists
+- `validation` checks user input before a command runs
+- `path_utils` expands `~/...` for execution and compacts home paths for display
 
-### Hide (Split)
+Step three is driven by CLI preflight. It should show one-image output only when preflight says one image fits. It should show split output only when preflight says multiple images are required
 
-High level:
+## Verification
 
-1. Run the planner once to compute shard count and manifest size
-2. Generate `set_id` and store it in each shard outer header
-3. Derive a master key once, then derive per-shard subkeys
-4. For each shard: encrypt with AAD, embed, and write output crash-safe (write temp file, then rename, refuses overwrite)
+Default optimized build:
 
-### Extract (Single Image)
+```sh
+make
+```
 
-High level:
+Full project check:
 
-1. Decode the input image into pixels
-2. Derive the embedding seed and extract the outer header bytes
-3. Validate outer header and extract ciphertext length
-4. Extract ciphertext bytes and decrypt
-5. Parse inner bytes and write payload output crash-safe (exclusive temp file, then rename, refuses overwrite)
+```sh
+make check
+```
 
-### Extract (Split)
+C-only check:
 
-Extraction does not trust filenames or directory order.
+```sh
+make verify-c
+```
 
-High level:
+Rust-only check:
 
-1. Enumerate directory entries up to `PLAINSIGHT_MAX_SET_SCAN_IMAGES`
-2. For each candidate: decode image, extract minimal outer header, parse, and group by `set_id`
-3. Validate one set (unique indices, shard 0 present, count complete)
-4. Process shard 0 first, decrypt, parse manifest, validate lengths
-5. Process shards 1..N-1 in index order, decrypt, and append bytes to output
-6. Write output crash-safe and fail closed on any mismatch
+```sh
+make verify-rust
+```
 
-## Forensics Notes (What Tools Can Observe)
-
-Even with encryption, the following facts can be observed from the file alone:
-
-- The file is a valid image of a given format
-- Pixel values have been modified compared to the original cover
-- The outer container header bytes are stored in the embedded bitstream
-- The header is not readable without the correct embedding seed, derived from the passphrase and the cover pixels (with LSBs cleared)
-
-Common analysis results and what they mean:
-
-- "Magic byte" scanners
-  Random-looking encrypted bytes can sometimes contain patterns that look like file signatures
-  These are usually false positives unless full parsing and validation succeeds
-
-- Bit-plane tools
-  LSB embedding can create visible patterns on low-texture covers when viewing low bits directly
-  This indicates modifications, not plaintext recovery
-
-## CLI Audit Scripts
-
-Entry point:
-
-- `tests/scripts/run_testing.sh`
-
-CLI audit harness:
-
-- `tests/scripts/cli_audit/run.sh`
-
-Coverage includes:
-
-- `info --json` parsing across supported formats
-- hide/extract roundtrips across formats
-- wrong-credential behavior
-- tamper detection (bit flip)
-- basic plaintext marker checks over output images
+`make check` covers sanitizer builds, C tests, clang-tidy, Rust formatting, Rust clippy, and Rust tests

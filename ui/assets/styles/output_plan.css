@@ -1,0 +1,234 @@
+.output-plan-section {
+  margin-top: -2px;
+}
+
+.output-plan-hero {
+  padding: 4px 0 18px 0;
+  border-radius: 0;
+  background-color: transparent;
+  border: 0;
+}
+
+.output-plan-split-asset {
+  min-width: 96px;
+  min-height: 96px;
+}
+
+.output-plan-single-asset {
+  min-width: 88px;
+  min-height: 88px;
+}
+
+.output-plan-title {
+  color: var(--text-main);
+  font-size: 26px;
+  font-weight: 850;
+}
+
+.output-plan-detail {
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.output-plan-grid {
+  margin-top: 8px;
+}
+
+.output-plan-card {
+  padding: 26px;
+  min-width: 330px;
+  border-radius: var(--radius-md);
+  background-color: var(--bg-panel);
+  border: var(--stroke) solid var(--border-subtle);
+  box-shadow: 0 18px 54px rgba(15, 23, 42, 0.12);
+}
+
+.output-plan-result-card {
+  min-width: 430px;
+}
+
+.output-plan-destination-card {
+  min-width: 520px;
+}
+
+.output-plan-card-title {
+  color: var(--text-main);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.output-plan-result {
+  color: var(--accent-hover);
+  font-size: 24px;
+  font-weight: 850;
+}
+
+.output-plan-result-success {
+  color: var(--success);
+}
+
+.output-plan-metric-row {
+  min-height: 66px;
+  padding: 0 0 13px 0;
+  border-bottom: var(--stroke) solid var(--border-subtle);
+}
+
+.output-plan-metric-icon {
+  min-width: 34px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.output-plan-metric-label {
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.output-plan-metric-value {
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.output-plan-notice {
+  margin-top: 4px;
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-input);
+  border: var(--stroke) solid var(--border-subtle);
+}
+
+.output-plan-success-notice {
+  background-color: color-mix(in srgb, var(--success) 10%, var(--bg-input));
+  border-color: color-mix(in srgb, var(--success) 38%, var(--border-subtle));
+}
+
+.notice-icon {
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  background-color: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 850;
+}
+
+.notice-icon-success {
+  background-color: var(--success);
+}
+
+.output-files-preview {
+  margin-top: 8px;
+}
+
+.output-file-preview-row {
+  min-height: 34px;
+  padding: 0 12px;
+  border: var(--stroke) solid var(--border-subtle);
+  border-bottom: 0;
+}
+
+.output-file-preview-row:last-child {
+  border-bottom: var(--stroke) solid var(--border-subtle);
+}
+
+.output-file-preview-icon {
+  min-width: 24px;
+  min-height: 24px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.output-plan-footer-notice,
+.output-plan-change-callout {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background-color: color-mix(in srgb, var(--accent) 5%, var(--bg-panel));
+  border: var(--stroke) solid var(--border-subtle);
+}
+
+.output-plan-footer-icon {
+  color: var(--success);
+  font-size: 18px;
+}
+
+.output-plan-change-icon,
+.output-plan-link-label {
+  color: var(--accent-hover);
+  font-weight: 750;
+}
+
+.output-plan-single-location-card,
+.output-plan-next-card {
+  padding: 20px 24px;
+}
+
+.output-plan-single-details-column {
+  min-width: 430px;
+}
+
+.output-plan-single-details-card {
+  min-height: 0;
+}
+
+.output-single-cover-preview-stack {
+  min-width: 190px;
+  min-height: 136px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-log);
+  border: var(--stroke) solid var(--border-control);
+  box-shadow: var(--shadow-control);
+}
+
+.output-single-cover-preview {
+  min-width: 190px;
+  min-height: 136px;
+}
+
+.output-single-cover-placeholder {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.output-single-file-name {
+  color: var(--text-main);
+  font-size: 20px;
+  font-weight: 850;
+}
+
+.output-plan-detail-row {
+  min-height: 27px;
+}
+
+.output-plan-next-row {
+  min-height: 30px;
+}
+
+.output-plan-next-number {
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 999px;
+  background-color: var(--accent);
+  color: var(--text-on-accent);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.output-single-expander {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.output-single-content {
+  padding-top: 10px;
+}
+
+.output-single-image {
+  min-width: 54px;
+  min-height: 54px;
+}

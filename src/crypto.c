@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -8,6 +11,8 @@
 
 // crypto.c wraps libsodium so higher-level modules can stay small and consistent
 // All functions treat inputs as untrusted and enforce explicit bounds
+
+#define PLAINSIGHT_COVER_HASH_CHUNK_BYTES 4096u
 
 static const char PLAINSIGHT_KDF_CTX_ENC[crypto_kdf_CONTEXTBYTES] = {
     'H', 'I', 'I', 'E', 'N', 'C', '0', '1'
@@ -365,20 +370,13 @@ plainsight_error plainsight_crypto_decrypt_with_aad(const uint8_t key[crypto_aea
     return PLAINSIGHT_OK;
 }
 
-plainsight_error plainsight_crypto_seed_from_passphrase_and_cover(const uint8_t *passphrase,
-                                                  size_t passphrase_len,
-                                                  const uint8_t *cover,
-                                                  size_t cover_len,
-                                                  uint8_t seed_out[32]) {
+plainsight_error plainsight_crypto_derive_stego_subkey(const uint8_t *passphrase,
+                                       size_t passphrase_len,
+                                       uint8_t subkey_out[PLAINSIGHT_STEGO_SUBKEY_BYTES]) {
     uint8_t stego_master[crypto_kdf_KEYBYTES];
-    uint8_t stego_subkey[32];
-    uint8_t cover_digest[32];
-    crypto_generichash_state state;
-    size_t cover_byte_index = 0u;
-    int hash_rc = 0;
     plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
 
-    if (passphrase == NULL || seed_out == NULL || cover == NULL || passphrase_len == 0u || cover_len == 0u) {
+    if (passphrase == NULL || subkey_out == NULL || passphrase_len == 0u) {
         return PLAINSIGHT_ERR_ARGS;
     }
 
@@ -387,7 +385,7 @@ plainsight_error plainsight_crypto_seed_from_passphrase_and_cover(const uint8_t 
     }
 
     // Separate stego master key from encryption key material
-    // This KDF is independent from container KDF so embedding cannot reuse the same key bytes
+    // Split extraction can reuse the subkey so directory scans do not run Argon2id per file
     if (crypto_pwhash(stego_master,
                       crypto_kdf_KEYBYTES,
                       (const char *)passphrase,
@@ -400,8 +398,8 @@ plainsight_error plainsight_crypto_seed_from_passphrase_and_cover(const uint8_t 
     }
 
     // Context-separated stego subkey avoids cross-use of raw passphrase KDF output
-    if (crypto_kdf_derive_from_key(stego_subkey,
-                                   sizeof(stego_subkey),
+    if (crypto_kdf_derive_from_key(subkey_out,
+                                   PLAINSIGHT_STEGO_SUBKEY_BYTES,
                                    1ULL,
                                    PLAINSIGHT_KDF_CTX_STEGO,
                                    stego_master) != 0) {
@@ -409,20 +407,55 @@ plainsight_error plainsight_crypto_seed_from_passphrase_and_cover(const uint8_t 
         goto cleanup;
     }
 
-    if (crypto_generichash_init(&state, stego_subkey, sizeof(stego_subkey), sizeof(cover_digest)) != 0) {
+    result_code = PLAINSIGHT_OK;
+
+cleanup:
+    // The derived subkey belongs to the caller; the temporary master key does not
+    sodium_memzero(stego_master, sizeof(stego_master));
+    return result_code;
+}
+
+plainsight_error plainsight_crypto_seed_from_subkey_and_cover(const uint8_t stego_subkey[PLAINSIGHT_STEGO_SUBKEY_BYTES],
+                                              const uint8_t *cover,
+                                              size_t cover_len,
+                                              uint8_t seed_out[32]) {
+    uint8_t masked_chunk[PLAINSIGHT_COVER_HASH_CHUNK_BYTES];
+    uint8_t cover_digest[32];
+    crypto_generichash_state state;
+    size_t cover_offset = 0u;
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
+
+    if (stego_subkey == NULL || cover == NULL || seed_out == NULL || cover_len == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
+    if (crypto_generichash_init(&state, stego_subkey, PLAINSIGHT_STEGO_SUBKEY_BYTES, sizeof(cover_digest)) != 0) {
         result_code = PLAINSIGHT_ERR_CRYPTO;
         goto cleanup;
     }
 
     // Masking LSB keeps seed stable before and after embedding
-    // Only the least significant bit is modified by the embedder
-    for (cover_byte_index = 0u; cover_byte_index < cover_len; cover_byte_index++) {
-        uint8_t cover_byte_without_lsb = (uint8_t)(cover[cover_byte_index] & 0xFEu);
-        hash_rc = crypto_generichash_update(&state, &cover_byte_without_lsb, 1u);
-        if (hash_rc != 0) {
+    // Chunking avoids one libsodium call per byte on large covers
+    while (cover_offset < cover_len) {
+        size_t chunk_len = cover_len - cover_offset;
+        size_t chunk_index = 0u;
+
+        if (chunk_len > sizeof(masked_chunk)) {
+            chunk_len = sizeof(masked_chunk);
+        }
+
+        // Only the least significant bit is modified by the embedder
+        // Clearing it before hashing makes cover and stego derive the same placement seed
+        for (chunk_index = 0u; chunk_index < chunk_len; chunk_index++) {
+            masked_chunk[chunk_index] = (uint8_t)(cover[cover_offset + chunk_index] & 0xFEu);
+        }
+
+        if (crypto_generichash_update(&state, masked_chunk, chunk_len) != 0) {
             result_code = PLAINSIGHT_ERR_CRYPTO;
             goto cleanup;
         }
+
+        cover_offset += chunk_len;
     }
 
     if (crypto_generichash_final(&state, cover_digest, sizeof(cover_digest)) != 0) {
@@ -437,7 +470,7 @@ plainsight_error plainsight_crypto_seed_from_passphrase_and_cover(const uint8_t 
                            cover_digest,
                            sizeof(cover_digest),
                            stego_subkey,
-                           sizeof(stego_subkey)) != 0) {
+                           PLAINSIGHT_STEGO_SUBKEY_BYTES) != 0) {
         result_code = PLAINSIGHT_ERR_CRYPTO;
         goto cleanup;
     }
@@ -445,9 +478,33 @@ plainsight_error plainsight_crypto_seed_from_passphrase_and_cover(const uint8_t 
     result_code = PLAINSIGHT_OK;
 
 cleanup:
-    // Wipe all transient secrets before returning
-    sodium_memzero(stego_master, sizeof(stego_master));
-    sodium_memzero(stego_subkey, sizeof(stego_subkey));
+    // Wipe hash state and digest because both were keyed by the stego subkey
+    sodium_memzero(&state, sizeof(state));
+    sodium_memzero(masked_chunk, sizeof(masked_chunk));
     sodium_memzero(cover_digest, sizeof(cover_digest));
+    return result_code;
+}
+
+plainsight_error plainsight_crypto_seed_from_passphrase_and_cover(const uint8_t *passphrase,
+                                                  size_t passphrase_len,
+                                                  const uint8_t *cover,
+                                                  size_t cover_len,
+                                                  uint8_t seed_out[32]) {
+    uint8_t stego_subkey[PLAINSIGHT_STEGO_SUBKEY_BYTES];
+    plainsight_error result_code = PLAINSIGHT_ERR_INTERNAL;
+
+    if (passphrase == NULL || cover == NULL || seed_out == NULL || passphrase_len == 0u || cover_len == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
+    result_code = plainsight_crypto_derive_stego_subkey(passphrase, passphrase_len, stego_subkey);
+    if (result_code != PLAINSIGHT_OK) {
+        goto cleanup;
+    }
+
+    result_code = plainsight_crypto_seed_from_subkey_and_cover(stego_subkey, cover, cover_len, seed_out);
+
+cleanup:
+    sodium_memzero(stego_subkey, sizeof(stego_subkey));
     return result_code;
 }

@@ -35,10 +35,8 @@ pub fn run_cli_command(
             Err(error_value) => {
                 // NotFound is common when running from different working directories
                 // Other errors (permission, exec format) usually mean the binary is not runnable
-                let error_text = format!(
-                    "failed to launch CLI binary '{}': {}",
-                    candidate_path, error_value
-                );
+                let error_text =
+                    format!("failed to launch CLI binary '{candidate_path}': {error_value}");
                 let is_not_found = error_value.kind() == std::io::ErrorKind::NotFound;
                 launch_errors.push(error_text);
                 if !is_not_found {

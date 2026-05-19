@@ -7,7 +7,7 @@ pub enum EmbedMethod {
 }
 
 impl EmbedMethod {
-    pub fn as_cli_value(self) -> &'static str {
+    pub const fn as_cli_value(self) -> &'static str {
         // CLI surface is stable, so UI treats these as protocol constants
         match self {
             Self::Lsb => "lsb",
@@ -32,6 +32,8 @@ pub struct HideCommand {
 pub struct ExtractCommand {
     // Stego image path
     pub input_path: String,
+    // Split shard folder path
+    pub input_dir: Option<String>,
     // Output path for recovered bytes
     pub output_path: String,
     // Passphrase file consumed by the C CLI

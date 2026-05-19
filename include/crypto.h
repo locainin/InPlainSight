@@ -85,7 +85,47 @@ plainsight_error plainsight_crypto_decrypt_with_aad(const uint8_t key[crypto_aea
                                     size_t plaintext_cap,
                                     size_t *plaintext_len);
 
+// Bytes in the stego subkey used to seed cover-dependent embedding order
+#define PLAINSIGHT_STEGO_SUBKEY_BYTES 32u
+
+// Derives a stego-only subkey from a passphrase
+//
+// Parameters:
+// - passphrase/passphrase_len: caller-owned passphrase bytes; length must be non-zero
+// - subkey_out: 32-byte caller-owned output buffer
+//
+// Bounds and ownership:
+// - no heap allocation is performed
+// - subkey_out must be wiped by the caller when no longer needed
+//
+// Returns PLAINSIGHT_OK on success, or a crypto/argument error
+// Complexity: one Argon2id derivation
+plainsight_error plainsight_crypto_derive_stego_subkey(const uint8_t *passphrase,
+                                       size_t passphrase_len,
+                                       uint8_t subkey_out[PLAINSIGHT_STEGO_SUBKEY_BYTES]);
+
+// Derives a deterministic embedding seed from a stego subkey + LSB-masked cover bytes
+//
+// Parameters:
+// - stego_subkey: 32-byte key from plainsight_crypto_derive_stego_subkey
+// - cover/cover_len: caller-owned image bytes; length must be non-zero
+// - seed_out: 32-byte caller-owned output buffer
+//
+// Bounds and ownership:
+// - no heap allocation is performed
+// - cover bytes are read only
+//
+// Returns PLAINSIGHT_OK on success, or a crypto/argument error
+// Complexity: O(cover_len)
+plainsight_error plainsight_crypto_seed_from_subkey_and_cover(const uint8_t stego_subkey[PLAINSIGHT_STEGO_SUBKEY_BYTES],
+                                              const uint8_t *cover,
+                                              size_t cover_len,
+                                              uint8_t seed_out[32]);
+
 // Derives a deterministic embedding seed from passphrase + LSB-masked cover bytes
+//
+// This is a compatibility wrapper for single-image operations
+// Split extraction should derive the stego subkey once and reuse it per shard
 plainsight_error plainsight_crypto_seed_from_passphrase_and_cover(const uint8_t *passphrase,
                                                   size_t passphrase_len,
                                                   const uint8_t *cover,

@@ -56,9 +56,8 @@ pub(super) fn resolve_hide_payload(
             }
 
             // Payload byte size is used by the planner and for UI messaging
-            let payload_metadata = std::fs::metadata(payload_file_path).map_err(|error_value| {
-                format!("failed reading payload metadata: {}", error_value)
-            })?;
+            let payload_metadata = std::fs::metadata(payload_file_path)
+                .map_err(|error_value| format!("failed reading payload metadata: {error_value}"))?;
 
             Ok(HidePayloadResolution {
                 payload_path: payload_file_path.to_string(),

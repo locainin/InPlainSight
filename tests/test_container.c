@@ -1,3 +1,6 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -125,6 +128,18 @@ int main(void) {
 
     if (!check_true(memcmp(outer_view.nonce, nonce, sizeof(nonce)) == 0,
                     "nonce mismatch")) {
+        return 1;
+    }
+
+    // The parser accepts only the supported compression mode values
+    g_inner_buf[12] = PLAINSIGHT_COMPRESSION_ZSTD;
+    if (!check_true(plainsight_container_parse_inner(g_inner_buf, inner_len, &inner_view) == PLAINSIGHT_OK,
+                    "zstd compression mode should parse")) {
+        return 1;
+    }
+    g_inner_buf[12] = 7u;
+    if (!check_true(plainsight_container_parse_inner(g_inner_buf, inner_len, &inner_view) == PLAINSIGHT_ERR_BAD_FORMAT,
+                    "unknown compression mode should fail parse")) {
         return 1;
     }
 

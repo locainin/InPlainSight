@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::fmt;
 
 use crate::command_builder::CommandExecution;
 
@@ -58,9 +59,8 @@ struct InfoEnvelope {
 }
 
 #[derive(Debug, Clone)]
-// Flattened plan consumed by hide execution flow
-// This removes JSON nesting so call sites stay readable
-pub(crate) struct HidePreflightPlan {
+// Parsed planner output used by hide execution
+pub struct HidePreflightPlan {
     pub(crate) payload_provided: bool,
     pub(crate) payload_bytes: u64,
     pub(crate) fits_single: bool,
@@ -76,24 +76,44 @@ pub(crate) struct HidePreflightPlan {
     pub(crate) plan_output_cap_risk: bool,
 }
 
-pub(crate) fn parse_hide_preflight_json(
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HidePreflightPlanError {
+    JsonParse(String),
+    UnsupportedSchemaVersion(u32),
+}
+
+impl fmt::Display for HidePreflightPlanError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::JsonParse(error_text) => {
+                write!(formatter, "failed to parse info JSON output: {error_text}")
+            }
+            Self::UnsupportedSchemaVersion(schema_version) => {
+                write!(
+                    formatter,
+                    "unsupported info plan schema version: {schema_version}"
+                )
+            }
+        }
+    }
+}
+
+pub fn parse_hide_preflight_json(
     command_execution: &CommandExecution,
-) -> Result<HidePreflightPlan, String> {
+) -> Result<HidePreflightPlan, HidePreflightPlanError> {
     // Parse raw stdout directly so non-JSON text is treated as a hard failure
     // The UI treats this as a protocol boundary and fails closed on schema drift
     let parsed_envelope: InfoEnvelope = serde_json::from_str(command_execution.stdout_text.trim())
-        .map_err(|error_value| format!("failed to parse info JSON output: {}", error_value))?;
+        .map_err(|error_value| HidePreflightPlanError::JsonParse(error_value.to_string()))?;
 
     // Planner schema version must match what this UI understands
     if parsed_envelope.plan_schema_version != 1u32 {
-        return Err(format!(
-            "unsupported info plan schema version: {}",
-            parsed_envelope.plan_schema_version
+        return Err(HidePreflightPlanError::UnsupportedSchemaVersion(
+            parsed_envelope.plan_schema_version,
         ));
     }
 
-    // Build a compact plan object used by the runner and log messages
-    // Flattening avoids repeated nested field access at call sites
+    // Copy validated planner fields into the execution-facing shape
     Ok(HidePreflightPlan {
         payload_provided: parsed_envelope.payload.provided,
         payload_bytes: parsed_envelope.payload.payload_bytes,

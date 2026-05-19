@@ -1,10 +1,8 @@
 // Hide preflight planning and dispatch
 //
-// Preflight uses `inplainsight info --json` so the UI can decide between:
-// - single output image
-// - split output directory
+// Preflight uses `inplainsight info --json` to select the required output shape
 
-use crate::app::app_execution::planning::parse_hide_preflight_json;
+use crate::app::app_execution::planning::{HidePreflightPlanError, parse_hide_preflight_json};
 use crate::app::app_logging::{LogLevel, append_structured_log, render_cli_invocation_for_log};
 use crate::command_builder::{
     InfoCommand, build_hide_arguments, build_info_arguments, run_cli_command,
@@ -14,7 +12,7 @@ use gtk4::prelude::*;
 
 use super::super::runner::{run_command_in_background, run_task_in_background_with_callback};
 use super::detail::log_stdout_snippet_for_json_parse_failure;
-use super::split::{prompt_split_then_run, should_prompt_for_split};
+use super::split::{run_split_workflow, should_prompt_for_split};
 use super::types::{HideExecutionInputs, HidePreflightUi, set_status_fail};
 
 pub(super) fn start_hide_preflight_then_run(
@@ -115,7 +113,10 @@ fn handle_hide_preflight_completion(
     let preflight_plan = match parse_hide_preflight_json(&info_execution) {
         Ok(value) => value,
         Err(error_text) => {
-            if error_text.contains("unsupported info plan schema version") {
+            if matches!(
+                error_text,
+                HidePreflightPlanError::UnsupportedSchemaVersion(_)
+            ) {
                 set_status_fail(&ui.status_label, "UI and CLI versions are incompatible");
                 append_structured_log(
                     &ui.log_buffer,
@@ -127,7 +128,12 @@ fn handle_hide_preflight_completion(
                 set_status_fail(&ui.status_label, "Preflight JSON parse failed");
             }
 
-            append_structured_log(&ui.log_buffer, "hide", LogLevel::Error, &error_text);
+            append_structured_log(
+                &ui.log_buffer,
+                "hide",
+                LogLevel::Error,
+                &error_text.to_string(),
+            );
             log_stdout_snippet_for_json_parse_failure(&ui.log_buffer, &info_execution.stdout_text);
 
             ui.run_button.set_sensitive(true);
@@ -135,10 +141,52 @@ fn handle_hide_preflight_completion(
         }
     };
 
-    // Split mode is only used when the planner reports a single cover cannot fit the payload
-    // This keeps the default experience as "one output image" when possible
+    append_structured_log(
+        &ui.log_buffer,
+        "hide",
+        LogLevel::Info,
+        &format!(
+            "preflight plan: cover {} {}x{} ({} channels, {} decoded bytes), payload {} bytes, single-image capacity {} bytes, per-image cap {} bytes, required images {}, limit {}, output-cap-risk {}",
+            preflight_plan.cover_format,
+            preflight_plan.cover_width,
+            preflight_plan.cover_height,
+            preflight_plan.cover_channels,
+            preflight_plan.cover_decoded_bytes,
+            preflight_plan.payload_bytes,
+            preflight_plan.max_payload_by_cover_bytes,
+            preflight_plan.max_payload_per_shard,
+            preflight_plan.required_shards,
+            preflight_plan.limiting_factor,
+            preflight_plan.plan_output_cap_risk,
+        ),
+    );
+
     if should_prompt_for_split(&preflight_plan) {
-        prompt_split_then_run(ui, inputs, preflight_plan, descriptor_guards_for_hide);
+        let output_dir_path = if inputs.output_dir.trim().is_empty() {
+            crate::app::app_execution::hide::split::derive_split_output_dir(
+                &inputs.hide_command.output_path,
+            )
+        } else {
+            std::path::PathBuf::from(inputs.output_dir.clone())
+        };
+
+        append_structured_log(
+            &ui.log_buffer,
+            "hide",
+            LogLevel::Info,
+            &format!(
+                "preflight requires split output: {} images will be created",
+                preflight_plan.required_shards
+            ),
+        );
+
+        run_split_workflow(
+            ui,
+            inputs,
+            preflight_plan.required_shards,
+            output_dir_path,
+            descriptor_guards_for_hide,
+        );
         return;
     }
 
@@ -175,10 +223,10 @@ fn run_single_hide(
     );
 
     // Status text is kept short so it fits in narrow layouts
-    ui.status_label.set_text("Encrypting and hiding payload...");
-    ui.status_label.remove_css_class("status-ready");
-    ui.status_label.remove_css_class("status-ok");
-    ui.status_label.remove_css_class("status-fail");
+    crate::app::app_ui_helpers::set_status_pending(
+        &ui.status_label,
+        "Encrypting and hiding payload...",
+    );
 
     // The actual CLI run happens in the background runner
     // The guard list is moved so descriptor-backed paths remain valid until completion

@@ -1,7 +1,11 @@
+// InPlainSight C module
+// Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -11,6 +15,53 @@
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
 #endif
+
+#ifndef O_NOFOLLOW
+#define O_NOFOLLOW 0
+#endif
+
+plainsight_error plainsight_io_expand_home_path(const char *path, char *out, size_t out_cap) {
+    const char *home_path = NULL;
+    size_t path_index = 0u;
+    size_t out_index = 0u;
+
+    if (path == NULL || out == NULL || out_cap == 0u) {
+        return PLAINSIGHT_ERR_ARGS;
+    }
+
+    // Only the current user's ~/ form is expanded
+    // ~other remains literal because guessing another home path is not safe
+    if (path[0] == '~' && (path[1] == '/' || path[1] == '\0')) {
+        size_t home_len = 0u;
+
+        home_path = getenv("HOME");
+        if (home_path == NULL || home_path[0] == '\0') {
+            return PLAINSIGHT_ERR_ARGS;
+        }
+
+        while (home_path[home_len] != '\0') {
+            if (home_len + 1u >= out_cap) {
+                return PLAINSIGHT_ERR_TOO_LARGE;
+            }
+            out[home_len] = home_path[home_len];
+            home_len++;
+        }
+        out_index = home_len;
+        path_index = 1u;
+    }
+
+    while (path[path_index] != '\0') {
+        if (out_index + 1u >= out_cap) {
+            return PLAINSIGHT_ERR_TOO_LARGE;
+        }
+        out[out_index] = path[path_index];
+        out_index++;
+        path_index++;
+    }
+
+    out[out_index] = '\0';
+    return PLAINSIGHT_OK;
+}
 
 static plainsight_error plainsight_read_exact_limit(int file_descriptor,
                                     uint8_t *output_bytes,
@@ -61,6 +112,7 @@ static plainsight_error plainsight_read_exact_limit(int file_descriptor,
 }
 
 plainsight_error plainsight_io_read_file(const char *path, uint8_t *out, size_t out_cap, size_t *out_len) {
+    char expanded_path[PLAINSIGHT_MAX_PATH_BYTES];
     int file_descriptor = -1;
     struct stat file_metadata;
     plainsight_error result_code = PLAINSIGHT_ERR_IO;
@@ -68,9 +120,13 @@ plainsight_error plainsight_io_read_file(const char *path, uint8_t *out, size_t 
     if (path == NULL || out == NULL || out_len == NULL) {
         return PLAINSIGHT_ERR_ARGS;
     }
+    result_code = plainsight_io_expand_home_path(path, expanded_path, sizeof(expanded_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
 
     // O_CLOEXEC prevents descriptor leaks if this process ever launches children
-    file_descriptor = open(path, O_RDONLY | O_CLOEXEC);
+    file_descriptor = open(expanded_path, O_RDONLY | O_CLOEXEC);
     if (file_descriptor < 0) {
         return PLAINSIGHT_ERR_IO;
     }
@@ -79,17 +135,19 @@ plainsight_error plainsight_io_read_file(const char *path, uint8_t *out, size_t 
         goto cleanup;
     }
 
-    if (S_ISREG(file_metadata.st_mode)) {
-        if (file_metadata.st_size < 0) {
-            result_code = PLAINSIGHT_ERR_IO;
-            goto cleanup;
-        }
+    if (!S_ISREG(file_metadata.st_mode)) {
+        result_code = PLAINSIGHT_ERR_UNSUPPORTED;
+        goto cleanup;
+    }
 
-        // Regular files can be pre-checked with st_size for fast oversize rejection
-        if ((uint64_t)file_metadata.st_size > (uint64_t)out_cap) {
-            result_code = PLAINSIGHT_ERR_TOO_LARGE;
-            goto cleanup;
-        }
+    if (file_metadata.st_size < 0) {
+        result_code = PLAINSIGHT_ERR_IO;
+        goto cleanup;
+    }
+
+    if ((uint64_t)file_metadata.st_size > (uint64_t)out_cap) {
+        result_code = PLAINSIGHT_ERR_TOO_LARGE;
+        goto cleanup;
     }
 
     result_code = plainsight_read_exact_limit(file_descriptor, out, out_cap, out_len);
@@ -121,15 +179,21 @@ static plainsight_error plainsight_write_all(int file_descriptor, const uint8_t 
 }
 
 plainsight_error plainsight_io_write_file(const char *path, const uint8_t *data, size_t data_len) {
+    char expanded_path[PLAINSIGHT_MAX_PATH_BYTES];
     int file_descriptor = -1;
     plainsight_error result_code = PLAINSIGHT_ERR_IO;
 
     if (path == NULL || (data == NULL && data_len > 0u)) {
         return PLAINSIGHT_ERR_ARGS;
     }
+    result_code = plainsight_io_expand_home_path(path, expanded_path, sizeof(expanded_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
 
-    // 0600 keeps extracted payload private by default
-    file_descriptor = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+    // 0600 keeps extracted payload private by default.
+    // O_EXCL avoids accidental overwrite. O_NOFOLLOW avoids symlink clobbering on platforms that support it.
+    file_descriptor = open(expanded_path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
     if (file_descriptor < 0) {
         return PLAINSIGHT_ERR_IO;
     }
@@ -172,6 +236,7 @@ plainsight_error plainsight_io_read_passphrase_file(const char *path, uint8_t *o
 }
 
 plainsight_error plainsight_io_get_regular_file_size(const char *path, uint64_t *out_size) {
+    char expanded_path[PLAINSIGHT_MAX_PATH_BYTES];
     int file_descriptor = -1;
     struct stat file_metadata;
     plainsight_error result_code = PLAINSIGHT_ERR_IO;
@@ -179,9 +244,13 @@ plainsight_error plainsight_io_get_regular_file_size(const char *path, uint64_t 
     if (path == NULL || out_size == NULL) {
         return PLAINSIGHT_ERR_ARGS;
     }
+    result_code = plainsight_io_expand_home_path(path, expanded_path, sizeof(expanded_path));
+    if (result_code != PLAINSIGHT_OK) {
+        return result_code;
+    }
 
     // Open with CLOEXEC so helper does not leak descriptors into child processes
-    file_descriptor = open(path, O_RDONLY | O_CLOEXEC);
+    file_descriptor = open(expanded_path, O_RDONLY | O_CLOEXEC);
     if (file_descriptor < 0) {
         return PLAINSIGHT_ERR_IO;
     }

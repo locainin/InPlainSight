@@ -1,5 +1,6 @@
 mod app;
 mod command_builder;
+mod path_utils;
 mod theme;
 mod validation;
 

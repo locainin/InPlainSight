@@ -5,6 +5,7 @@ use gtk::prelude::*;
 use gtk4 as gtk;
 
 use crate::app::app_logging::{LogLevel, append_structured_log, render_command_result};
+use crate::app::app_ui_helpers::set_status_fail;
 use crate::command_builder::{CommandExecution, run_cli_command};
 
 use std::ffi::OsString;
@@ -15,7 +16,7 @@ enum UiMessage {
 }
 
 // Run CLI work outside GTK main thread and forward result back through a channel
-pub(crate) fn run_command_in_background(
+pub fn run_command_in_background(
     operation_name: &'static str,
     cli_binary_path: String,
     argument_list: Vec<OsString>,
@@ -38,7 +39,7 @@ pub(crate) fn run_command_in_background(
 }
 
 // Run an arbitrary command task outside GTK main thread and forward result safely
-pub(crate) fn run_task_in_background<F>(
+pub fn run_task_in_background<F>(
     operation_name: &'static str,
     run_button: gtk::Button,
     status_label: gtk::Label,
@@ -67,7 +68,7 @@ pub(crate) fn run_task_in_background<F>(
 
 // Run a task in a worker thread and invoke a completion callback on the GTK main thread
 // This is used when a multi-step UI flow needs to branch on the first command result
-pub(crate) fn run_task_in_background_with_callback<F, C>(task_fn: F, callback_fn: C)
+pub fn run_task_in_background_with_callback<F, C>(task_fn: F, callback_fn: C)
 where
     F: FnOnce() -> Result<CommandExecution, String> + Send + 'static,
     C: FnOnce(Result<CommandExecution, String>) + 'static,
@@ -124,15 +125,12 @@ fn poll_background_result(
                             operation_name,
                             &status_label,
                             &log_buffer,
-                            command_execution,
+                            &command_execution,
                         );
                     }
                     Err(error_text) => {
                         // Launch errors are displayed without assuming exit codes
-                        status_label.set_text("Execution failed");
-                        status_label.remove_css_class("status-ready");
-                        status_label.remove_css_class("status-ok");
-                        status_label.add_css_class("status-fail");
+                        set_status_fail(&status_label, "Execution failed");
                         append_structured_log(
                             &log_buffer,
                             operation_name,
@@ -147,10 +145,7 @@ fn poll_background_result(
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                 // Disconnected channel indicates worker thread ended unexpectedly
                 run_button.set_sensitive(true);
-                status_label.set_text("Execution channel disconnected");
-                status_label.remove_css_class("status-ready");
-                status_label.remove_css_class("status-ok");
-                status_label.add_css_class("status-fail");
+                set_status_fail(&status_label, "Execution channel disconnected");
                 append_structured_log(
                     &log_buffer,
                     operation_name,

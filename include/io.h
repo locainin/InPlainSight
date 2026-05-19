@@ -14,17 +14,24 @@ extern "C" {
 #define PLAINSIGHT_MAX_PASSPHRASE_BYTES 256u
 #define PLAINSIGHT_MAX_FILENAME_BYTES 128u
 #define PLAINSIGHT_MAX_MIME_BYTES 96u
-#define PLAINSIGHT_MAX_PAYLOAD_BYTES (8u * 1024u * 1024u)
+#define PLAINSIGHT_MAX_PATH_BYTES 1024u
+#define PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES (8ULL * 1024ULL * 1024ULL)
+#define PLAINSIGHT_MAX_SHARD_PLAINTEXT_BYTES (8ULL * 1024ULL * 1024ULL)
+#define PLAINSIGHT_MAX_PAYLOAD_BYTES PLAINSIGHT_MAX_SINGLE_PAYLOAD_BYTES
 
 // Reads a file into caller-provided storage with strict size checks
 plainsight_error plainsight_io_read_file(const char *path, uint8_t *out, size_t out_cap, size_t *out_len);
+
+// Expands ~/ paths into the current user's home directory
+plainsight_error plainsight_io_expand_home_path(const char *path, char *out, size_t out_cap);
 
 // Writes all bytes to a file path with private permissions
 plainsight_error plainsight_io_write_file(const char *path, const uint8_t *data, size_t data_len);
 
 // Reads passphrase bytes and trims trailing CR/LF by length only
 // Returned bytes are not NUL-terminated and may contain embedded NUL values
-plainsight_error plainsight_io_read_passphrase_file(const char *path, uint8_t *out, size_t out_cap, size_t *out_len);
+plainsight_error plainsight_io_read_passphrase_file(const char *path, uint8_t *out, size_t out_cap,
+                                                    size_t *out_len);
 
 // Reads regular-file size without loading full contents into memory
 // Returns PLAINSIGHT_ERR_UNSUPPORTED when path is not a regular file

@@ -1,44 +1,58 @@
 use std::path::Path;
 
+use crate::path_utils::expand_home_path;
+
 // Shared non-empty check for path fields
-pub(crate) fn validate_required_path(path_value: &str, label: &str) -> Result<(), String> {
+pub fn validate_required_path(path_value: &str, label: &str) -> Result<(), String> {
     if path_value.trim().is_empty() {
-        return Err(format!("{} is required", label));
+        return Err(format!("{label} is required"));
     }
 
     Ok(())
 }
 
 // Require existing regular file for all input paths
-pub(crate) fn validate_existing_file(path_value: &str, label: &str) -> Result<(), String> {
-    let candidate_path = Path::new(path_value);
+pub fn validate_existing_file(path_value: &str, label: &str) -> Result<(), String> {
+    let candidate_path = expand_home_path(path_value);
     if !candidate_path.exists() {
-        return Err(format!("{} does not exist", label));
+        return Err(format!("{label} does not exist"));
     }
     if !candidate_path.is_file() {
-        return Err(format!("{} is not a file", label));
+        return Err(format!("{label} is not a file"));
+    }
+    Ok(())
+}
+
+// Require an existing directory for folder-based CLI inputs
+pub fn validate_existing_directory(path_value: &str, label: &str) -> Result<(), String> {
+    let candidate_path = expand_home_path(path_value);
+    if !candidate_path.exists() {
+        return Err(format!("{label} does not exist"));
+    }
+    if !candidate_path.is_dir() {
+        return Err(format!("{label} is not a directory"));
     }
     Ok(())
 }
 
 // Output target must have a valid parent directory
-pub(crate) fn validate_output_parent_exists(path_value: &str, label: &str) -> Result<(), String> {
-    let output_path = Path::new(path_value);
+pub fn validate_output_parent_exists(path_value: &str, label: &str) -> Result<(), String> {
+    let output_path = expand_home_path(path_value);
     let Some(parent_directory) = output_path.parent() else {
-        return Err(format!("{} has no parent directory", label));
+        return Err(format!("{label} has no parent directory"));
     };
 
     if !parent_directory.exists() {
-        return Err(format!("parent directory for {} does not exist", label));
+        return Err(format!("parent directory for {label} does not exist"));
     }
     if !parent_directory.is_dir() {
-        return Err(format!("parent path for {} is not a directory", label));
+        return Err(format!("parent path for {label} is not a directory"));
     }
     Ok(())
 }
 
 // Hide supports lossless outputs that match current C backends
-pub(crate) fn validate_hide_output_extension(path_value: &str) -> Result<(), String> {
+pub fn validate_hide_output_extension(path_value: &str) -> Result<(), String> {
     let output_path = Path::new(path_value);
     let Some(extension_value) = output_path.extension().and_then(|value| value.to_str()) else {
         return Err("output path must include an extension (.png, .jxl, .bmp, .ppm)".to_string());
@@ -53,15 +67,14 @@ pub(crate) fn validate_hide_output_extension(path_value: &str) -> Result<(), Str
 }
 
 // Input image must use a supported extension
-pub(crate) fn validate_supported_image_input_extension(
+pub fn validate_supported_image_input_extension(
     path_value: &str,
     label: &str,
 ) -> Result<(), String> {
     let input_path = Path::new(path_value);
     let Some(extension_value) = input_path.extension().and_then(|value| value.to_str()) else {
         return Err(format!(
-            "{} must include an extension (.png, .jxl, .bmp, .ppm, .jpg, .jpeg, .webp)",
-            label
+            "{label} must include an extension (.png, .jxl, .bmp, .ppm, .jpg, .jpeg, .webp)"
         ));
     };
 
@@ -71,19 +84,18 @@ pub(crate) fn validate_supported_image_input_extension(
     }
 
     Err(format!(
-        "{} extension is unsupported (use .png, .jxl, .bmp, .ppm, .jpg, .jpeg, .webp)",
-        label
+        "{label} extension is unsupported (use .png, .jxl, .bmp, .ppm, .jpg, .jpeg, .webp)"
     ))
 }
 
-pub(crate) fn is_supported_output_image_extension(extension_text: &str) -> bool {
+pub fn is_supported_output_image_extension(extension_text: &str) -> bool {
     extension_text == "png"
         || extension_text == "jxl"
         || extension_text == "bmp"
         || extension_text == "ppm"
 }
 
-pub(crate) fn is_supported_input_image_extension(extension_text: &str) -> bool {
+pub fn is_supported_input_image_extension(extension_text: &str) -> bool {
     is_supported_output_image_extension(extension_text)
         || extension_text == "jpg"
         || extension_text == "jpeg"

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use crate::command_builder::discover;
 use crate::command_builder::util;
+use crate::path_utils::compact_home_path;
 
 pub fn default_cli_binary_path() -> String {
     // Allow explicit override for custom layouts and packaging
@@ -38,10 +39,7 @@ pub fn default_hide_output_path() -> String {
                 .map(|home_dir| home_dir.join("Downloads"))
         })
         .unwrap_or_else(|| PathBuf::from("."));
-    downloads_dir
-        .join("hidden_payload.png")
-        .to_string_lossy()
-        .to_string()
+    compact_home_path(&downloads_dir.join("hidden_payload.png"))
 }
 
 // Extract output defaults to Downloads for a familiar desktop workflow
@@ -53,8 +51,5 @@ pub fn default_extract_output_path() -> String {
                 .map(|home_dir| home_dir.join("Downloads"))
         })
         .unwrap_or_else(|| PathBuf::from("."));
-    downloads_dir
-        .join("recovered_payload.bin")
-        .to_string_lossy()
-        .to_string()
+    compact_home_path(&downloads_dir.join("recovered_payload.bin"))
 }

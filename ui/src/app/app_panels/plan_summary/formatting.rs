@@ -1,0 +1,69 @@
+use crate::path_utils::{compact_home_text, expand_home_path};
+
+// Return a readable basename or a neutral placeholder for empty paths
+pub(super) fn basename_or_dash(path_text: &str) -> String {
+    // Empty inputs should not look like real files in the side summary
+    if path_text.trim().is_empty() {
+        return "-".to_string();
+    }
+
+    // Fall back to the original text when the platform path cannot expose a UTF-8 name
+    expand_home_path(path_text)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(path_text)
+        .to_string()
+}
+
+// Return payload basename plus size when the selected file can be inspected
+pub(super) fn payload_summary(path_text: &str) -> String {
+    // Missing payloads stay pending and never influence capacity decisions
+    if path_text.trim().is_empty() {
+        return "-".to_string();
+    }
+
+    let path_value = expand_home_path(path_text);
+    let name = path_value
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(path_text);
+    if let Ok(metadata) = std::fs::metadata(&path_value) {
+        // File size is informational only; preflight still owns image-count math
+        return format!("{} ({})", name, format_file_size(metadata.len()));
+    }
+
+    name.to_string()
+}
+
+pub(super) fn compact_path_or_dash(path_text: &str) -> String {
+    // Side summary paths use ~/ so screenshots do not expose the local account name
+    if path_text.trim().is_empty() {
+        return "-".to_string();
+    }
+
+    compact_home_text(path_text)
+}
+
+fn format_file_size(byte_count: u64) -> String {
+    // Keep summary sizes consistent with the main panel formatting
+    const KIB: u64 = 1024;
+    const MIB: u64 = KIB * 1024;
+    const GIB: u64 = MIB * 1024;
+
+    if byte_count >= GIB {
+        format_decimal_unit(byte_count, GIB, "GB")
+    } else if byte_count >= MIB {
+        format_decimal_unit(byte_count, MIB, "MB")
+    } else if byte_count >= KIB {
+        format_decimal_unit(byte_count, KIB, "KB")
+    } else {
+        format!("{byte_count} B")
+    }
+}
+
+fn format_decimal_unit(byte_count: u64, unit_size: u64, unit_label: &str) -> String {
+    // Manual decimal formatting gives stable output across system locales
+    let whole = byte_count / unit_size;
+    let decimal = ((byte_count % unit_size) * 10) / unit_size;
+    format!("{whole}.{decimal} {unit_label}")
+}

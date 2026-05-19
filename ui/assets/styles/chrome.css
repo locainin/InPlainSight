@@ -1,0 +1,117 @@
+.sidebar {
+  background-color: var(--bg-sidebar);
+  border-right: var(--stroke) solid var(--border-subtle);
+  padding: 20px 14px;
+}
+
+.brand-row {
+  margin-bottom: 6px;
+}
+
+.brand-mark {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+  background-image: linear-gradient(145deg, #4f8cff, #1d4ed8);
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 900;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.32);
+}
+
+.brand-title {
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.brand-subtitle {
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.sidebar-nav {
+  margin-top: 8px;
+}
+
+button.sidebar-button {
+  background-image: none;
+  min-height: 42px;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  border: var(--stroke) solid transparent;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+button.sidebar-button:hover {
+  background-color: transparent;
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+button.sidebar-button:focus-visible {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+button.sidebar-button-active {
+  background-color: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text-main);
+}
+
+.sidebar-icon {
+  min-width: 18px;
+}
+
+.sidebar-status-row {
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+  background-color: var(--bg-panel);
+  border: var(--stroke) solid var(--border-subtle);
+}
+
+button.sidebar-tool-button,
+button.icon-button {
+  background-image: none;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-input);
+  border: var(--stroke) solid var(--border-subtle);
+  color: var(--text-muted);
+  padding: 0;
+  box-shadow: var(--shadow-control);
+}
+
+button.sidebar-tool-button:hover,
+button.icon-button:hover {
+  background-color: var(--bg-input);
+  border-color: var(--border-control);
+  color: var(--text-main);
+}
+
+.sidebar-status {
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.footer {
+  min-height: 36px;
+  background-color: var(--bg-titlebar);
+  border-top: var(--stroke) solid var(--border-subtle);
+  padding: 0 20px;
+}
+
+.footer-text,
+.footer-version {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 650;
+}

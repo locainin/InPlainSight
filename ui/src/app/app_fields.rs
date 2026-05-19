@@ -1,12 +1,20 @@
 use gtk::prelude::*;
 use gtk4 as gtk;
 
-use std::rc::Rc;
-
 use crate::command_builder::EmbedMethod;
+use crate::path_utils::compact_home_path;
 
 use super::app_logging::{LogLevel, append_structured_log};
-use super::app_types::{FileFieldRow, HidePayloadMode, PassphraseMode};
+use super::app_types::{ExtractInputMode, FileFieldRow, HidePayloadMode, PassphraseMode};
+use super::app_ui_helpers::show_info_dialog;
+
+#[derive(Clone)]
+struct FileChooserContext {
+    window: gtk::ApplicationWindow,
+    log_buffer: gtk::TextBuffer,
+    path_entry: gtk::Entry,
+    title: String,
+}
 
 // Embedding method options map directly to CLI values
 pub fn build_method_dropdown() -> gtk::DropDown {
@@ -40,37 +48,15 @@ pub fn build_passphrase_source_dropdown() -> gtk::DropDown {
     dropdown
 }
 
-pub fn build_method_row(method_dropdown: &gtk::DropDown) -> gtk::Box {
-    let method_label = gtk::Label::new(Some("Embedding Method (LSB)"));
-    method_label.add_css_class("section-caption");
-    method_label.set_xalign(0.0);
-
-    let method_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    method_box.append(&method_label);
-    method_box.append(method_dropdown);
-    method_box
-}
-
-pub fn build_payload_source_row(payload_source_dropdown: &gtk::DropDown) -> gtk::Box {
-    let source_label = gtk::Label::new(Some("Payload Source"));
-    source_label.add_css_class("section-caption");
-    source_label.set_xalign(0.0);
-
-    let source_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    source_box.append(&source_label);
-    source_box.append(payload_source_dropdown);
-    source_box
-}
-
-pub fn build_passphrase_source_row(passphrase_source_dropdown: &gtk::DropDown) -> gtk::Box {
-    let source_label = gtk::Label::new(Some("Passphrase Source"));
-    source_label.add_css_class("section-caption");
-    source_label.set_xalign(0.0);
-
-    let source_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    source_box.append(&source_label);
-    source_box.append(passphrase_source_dropdown);
-    source_box
+// Extract source selector exposes the CLI's --input and --input-dir modes
+pub fn build_extract_input_source_dropdown() -> gtk::DropDown {
+    let dropdown = gtk::DropDown::from_strings(&["single image", "split folder"]);
+    dropdown.set_selected(0);
+    dropdown.add_css_class("selector");
+    dropdown.set_tooltip_text(Some(
+        "Choose one stego image or a folder of split shard images",
+    ));
+    dropdown
 }
 
 pub fn build_file_field_row(
@@ -118,6 +104,7 @@ pub fn build_file_field_row(
     FileFieldRow {
         container_box,
         path_entry,
+        browse_button,
     }
 }
 
@@ -141,6 +128,13 @@ pub fn selected_passphrase_mode(passphrase_source_dropdown: &gtk::DropDown) -> P
     }
 }
 
+pub fn selected_extract_input_mode(input_source_dropdown: &gtk::DropDown) -> ExtractInputMode {
+    match input_source_dropdown.selected() {
+        1 => ExtractInputMode::Folder,
+        _ => ExtractInputMode::File,
+    }
+}
+
 fn connect_file_chooser_button(
     window: &gtk::ApplicationWindow,
     log_buffer: &gtk::TextBuffer,
@@ -149,158 +143,128 @@ fn connect_file_chooser_button(
     title_text: &str,
     action_type: gtk::FileChooserAction,
 ) {
-    // Clone GTK objects into callback closure owned by button signal
-    let window_clone = window.clone();
-    let log_buffer_clone = log_buffer.clone();
-    let path_entry_clone = path_entry.clone();
-    let title_value = title_text.to_string();
+    let chooser_context = FileChooserContext {
+        window: window.clone(),
+        log_buffer: log_buffer.clone(),
+        path_entry: path_entry.clone(),
+        title: title_text.to_string(),
+    };
 
     browse_button.connect_clicked(move |_| {
-        let file_dialog = gtk::FileDialog::builder().title(&title_value).build();
-        let path_entry_response_clone = path_entry_clone.clone();
-        let log_buffer_response_clone = log_buffer_clone.clone();
-
-        // Build a reusable dialog closure for "non-local file" cases
-        // Rc keeps it callable from the open and save callback branches
-        let show_non_local_file_dialog = {
-            let window_for_dialog = window_clone.clone();
-            let title_for_dialog = title_value.clone();
-            Rc::new(move || {
-                let dialog = gtk::AlertDialog::builder()
-                    .message("Only local files are supported")
-                    .detail(format!(
-                        "{} selection did not produce a local filesystem path",
-                        title_for_dialog
-                    ))
-                    .build();
-                dialog.set_buttons(&["OK"]);
-                dialog.set_default_button(0);
-                dialog.choose(
-                    Some(&window_for_dialog),
-                    None::<&gtk::gio::Cancellable>,
-                    |_| {},
-                );
-            })
-        };
-
+        let file_dialog = gtk::FileDialog::builder()
+            .title(&chooser_context.title)
+            .build();
         match action_type {
-            gtk::FileChooserAction::Save => {
-                // Save chooser allows creating a new destination path
-                let title_for_save = title_value.clone();
-                let window_for_save_dialog = window_clone.clone();
-                let log_buffer_for_save = log_buffer_response_clone.clone();
-                let show_non_local_for_save = show_non_local_file_dialog.clone();
-
-                file_dialog.save(
-                    Some(&window_clone),
-                    None::<&gtk::gio::Cancellable>,
-                    move |dialog_result| match dialog_result {
-                        Ok(file_value) => {
-                            if let Some(path_value) = file_value.path() {
-                                path_entry_response_clone
-                                    .set_text(path_value.to_string_lossy().as_ref());
-                            } else {
-                                append_structured_log(
-                                    &log_buffer_for_save,
-                                    "ui",
-                                    LogLevel::Error,
-                                    &format!(
-                                        "file picker returned non-local selection for {}",
-                                        title_for_save
-                                    ),
-                                );
-                                show_non_local_for_save();
-                            }
-                        }
-                        Err(error_value) => {
-                            // Cancel is a normal user action and should stay silent
-                            if error_value.matches(gtk::gio::IOErrorEnum::Cancelled) {
-                                return;
-                            }
-
-                            append_structured_log(
-                                &log_buffer_for_save,
-                                "ui",
-                                LogLevel::Error,
-                                &format!(
-                                    "file picker failed for {}: {}",
-                                    title_for_save, error_value
-                                ),
-                            );
-
-                            let dialog = gtk::AlertDialog::builder()
-                                .message("File selection failed")
-                                .detail(format!("{} picker error: {}", title_for_save, error_value))
-                                .build();
-                            dialog.set_buttons(&["OK"]);
-                            dialog.set_default_button(0);
-                            dialog.choose(
-                                Some(&window_for_save_dialog),
-                                None::<&gtk::gio::Cancellable>,
-                                |_| {},
-                            );
-                        }
-                    },
-                );
-            }
-            _ => {
-                // Open chooser is used for existing input files
-                let title_for_open = title_value.clone();
-                let window_for_open_dialog = window_clone.clone();
-                let log_buffer_for_open = log_buffer_response_clone.clone();
-                let show_non_local_for_open = show_non_local_file_dialog.clone();
-
-                file_dialog.open(
-                    Some(&window_clone),
-                    None::<&gtk::gio::Cancellable>,
-                    move |dialog_result| match dialog_result {
-                        Ok(file_value) => {
-                            if let Some(path_value) = file_value.path() {
-                                path_entry_response_clone
-                                    .set_text(path_value.to_string_lossy().as_ref());
-                            } else {
-                                append_structured_log(
-                                    &log_buffer_for_open,
-                                    "ui",
-                                    LogLevel::Error,
-                                    &format!(
-                                        "file picker returned non-local selection for {}",
-                                        title_for_open
-                                    ),
-                                );
-                                show_non_local_for_open();
-                            }
-                        }
-                        Err(error_value) => {
-                            if error_value.matches(gtk::gio::IOErrorEnum::Cancelled) {
-                                return;
-                            }
-
-                            append_structured_log(
-                                &log_buffer_for_open,
-                                "ui",
-                                LogLevel::Error,
-                                &format!(
-                                    "file picker failed for {}: {}",
-                                    title_for_open, error_value
-                                ),
-                            );
-
-                            let dialog = gtk::AlertDialog::builder()
-                                .message("File selection failed")
-                                .detail(format!("{} picker error: {}", title_for_open, error_value))
-                                .build();
-                            dialog.set_buttons(&["OK"]);
-                            dialog.set_default_button(0);
-                            dialog.choose(
-                                Some(&window_for_open_dialog),
-                                None::<&gtk::gio::Cancellable>,
-                                |_| {},
-                            );
-                        }
-                    },
-                );
-            }
+            gtk::FileChooserAction::SelectFolder => select_folder(&file_dialog, &chooser_context),
+            gtk::FileChooserAction::Save => save_file(&file_dialog, &chooser_context),
+            _ => open_file(&file_dialog, &chooser_context),
         }
     });
+}
+
+fn select_folder(file_dialog: &gtk::FileDialog, context: &FileChooserContext) {
+    let context = context.clone();
+    let window = context.window.clone();
+    file_dialog.select_folder(
+        Some(&window),
+        None::<&gtk::gio::Cancellable>,
+        move |dialog_result| handle_picker_result(&context, dialog_result, "folder"),
+    );
+}
+
+fn save_file(file_dialog: &gtk::FileDialog, context: &FileChooserContext) {
+    let context = context.clone();
+    let window = context.window.clone();
+    file_dialog.save(
+        Some(&window),
+        None::<&gtk::gio::Cancellable>,
+        move |dialog_result| handle_picker_result(&context, dialog_result, "file"),
+    );
+}
+
+fn open_file(file_dialog: &gtk::FileDialog, context: &FileChooserContext) {
+    let context = context.clone();
+    let window = context.window.clone();
+    file_dialog.open(
+        Some(&window),
+        None::<&gtk::gio::Cancellable>,
+        move |dialog_result| handle_picker_result(&context, dialog_result, "file"),
+    );
+}
+
+fn handle_picker_result(
+    context: &FileChooserContext,
+    dialog_result: Result<gtk::gio::File, gtk::glib::Error>,
+    picker_kind: &str,
+) {
+    match dialog_result {
+        Ok(file_value) => handle_selected_file(context, &file_value, picker_kind),
+        Err(error_value) => handle_picker_error(context, &error_value, picker_kind),
+    }
+}
+
+fn handle_selected_file(
+    context: &FileChooserContext,
+    file_value: &gtk::gio::File,
+    picker_kind: &str,
+) {
+    if let Some(path_value) = file_value.path() {
+        context.path_entry.set_text(&compact_home_path(&path_value));
+        return;
+    }
+
+    append_structured_log(
+        &context.log_buffer,
+        "ui",
+        LogLevel::Error,
+        &format!(
+            "{picker_kind} picker returned non-local selection for {}",
+            context.title
+        ),
+    );
+    show_dialog(
+        &context.window,
+        "Only local files are supported",
+        &format!(
+            "{} selection did not produce a local filesystem path",
+            context.title
+        ),
+    );
+}
+
+fn handle_picker_error(
+    context: &FileChooserContext,
+    error_value: &gtk::glib::Error,
+    picker_kind: &str,
+) {
+    if error_value.matches(gtk::gio::IOErrorEnum::Cancelled) {
+        return;
+    }
+
+    append_structured_log(
+        &context.log_buffer,
+        "ui",
+        LogLevel::Error,
+        &format!(
+            "{picker_kind} picker failed for {}: {error_value}",
+            context.title
+        ),
+    );
+    show_dialog(
+        &context.window,
+        &format!("{} selection failed", title_case_picker_kind(picker_kind)),
+        &format!("{} picker error: {error_value}", context.title),
+    );
+}
+
+fn show_dialog(parent_window: &gtk::ApplicationWindow, message_text: &str, detail_text: &str) {
+    show_info_dialog(parent_window, message_text, detail_text);
+}
+
+fn title_case_picker_kind(picker_kind: &str) -> &'static str {
+    if picker_kind == "folder" {
+        "Folder"
+    } else {
+        "File"
+    }
 }
