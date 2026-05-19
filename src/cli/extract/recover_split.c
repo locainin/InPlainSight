@@ -31,6 +31,8 @@ plainsight_error plainsight_cli_run_extract_split(const plainsight_extract_optio
     return PLAINSIGHT_ERR_ARGS;
   }
 
+  // libc directory calls do not expand shell shorthand such as ~
+  // The original text is kept for logs, while scanning uses the real path
   result_code =
       plainsight_io_expand_home_path(options->input_dir, expanded_input_dir, sizeof(expanded_input_dir));
   if (result_code != PLAINSIGHT_OK) {
@@ -59,6 +61,7 @@ plainsight_error plainsight_cli_run_extract_split(const plainsight_extract_optio
     goto cleanup;
   }
 
+  // Assembly opens the final output only after shard 0 authenticates the payload metadata
   result_code = plainsight_cli_split_assemble_payload(options, &split_set, passphrase_length, stego_subkey);
 
 cleanup:

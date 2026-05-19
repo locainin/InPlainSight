@@ -6,13 +6,19 @@
 
 #include "../../internal.h"
 
+// Decimal logging is shared by preflight and error paths
+// Keeping it here avoids scattered printf format choices
 void plainsight_cli_hide_write_u64_stderr(uint64_t value);
 
+// Reports capacity failure before any passphrase is read
+// This keeps normal planning errors away from secret handling paths
 void plainsight_cli_hide_log_size_limits(uint64_t payload_file_size, uint64_t max_payload_by_cover);
 
+// Emits the stable CLI preflight block consumed by GUI logs
 void plainsight_cli_hide_log_preflight(const plainsight_info_report *report, uint64_t original_payload_bytes,
                                        uint64_t effective_payload_bytes, uint8_t compression_mode);
 
+// Tries bounded zstd levels and stores the smallest useful result in workspace ciphertext scratch
 plainsight_error plainsight_cli_hide_choose_auto_compression(size_t payload_length,
                                                              size_t *compressed_length_out);
 

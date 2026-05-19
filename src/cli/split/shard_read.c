@@ -23,6 +23,7 @@ plainsight_error plainsight_cli_split_read_shard(const char *path, plainsight_em
 
   // Each candidate must be decoded so pixels can be inspected by the embed backend
   // This is the cost of a keyed pixel stego scheme
+  // Directory scans may call this many times, so all state stays in the shared workspace
   result_code = plainsight_cli_load_image(path, &g_cli_workspace.image);
   if (result_code != PLAINSIGHT_OK) {
     return PLAINSIGHT_ERR_AUTH;
@@ -39,6 +40,7 @@ plainsight_error plainsight_cli_split_read_shard(const char *path, plainsight_em
 
   // Only the embedded bytes are returned here
   // The outer header parse later slices ciphertext without copying
+  // container_out must remain alive while ciphertext_out is used
   result_code = plainsight_extract_payload(method, g_cli_workspace.image.pixels,
                                            g_cli_workspace.image.data_len, g_cli_workspace.image.channels,
                                            container_out, container_cap, &container_len, embed_seed);

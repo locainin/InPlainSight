@@ -22,6 +22,8 @@ plainsight_error plainsight_cli_parse_extract_args(int argc, char **argv,
   options->passphrase_path = NULL;
   options->method = PLAINSIGHT_EMBED_LSB;
 
+  // Extract accepts either one stego image or one shard directory
+  // The final cross-check below keeps those modes mutually exclusive
   for (argument_index = 2; argument_index < argc; argument_index++) {
     const char *argument_text = argv[argument_index];
 
@@ -94,6 +96,7 @@ plainsight_error plainsight_cli_parse_extract_args(int argc, char **argv,
     (void)fputs("missing required --output for extract command\n", stderr);
     return PLAINSIGHT_ERR_ARGS;
   }
+  // The passphrase file is mandatory for both single-image and split recovery
   if (options->passphrase_path == NULL) {
     (void)fputs("missing required --passphrase-file for extract command\n", stderr);
     return PLAINSIGHT_ERR_ARGS;

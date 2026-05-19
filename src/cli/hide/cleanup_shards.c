@@ -19,6 +19,8 @@ void plainsight_cli_hide_shard_cleanup_outputs(const plainsight_hide_options *op
   // Preflight ensures these paths did not exist before this operation
   // Removing only committed indices avoids touching unrelated files
   for (delete_index = 0u; delete_index < shards_written; delete_index++) {
+    // Filename formatting is repeated instead of trusting stored paths from a failed write
+    // This keeps cleanup tied to the same validated template used by the writer
     if (plainsight_cli_split_format_shard_filename(template_text, delete_index, shard_name,
                                                    sizeof(shard_name)) == PLAINSIGHT_OK &&
         plainsight_cli_join_dir_and_name(options->output_dir, shard_name, shard_path, sizeof(shard_path)) ==

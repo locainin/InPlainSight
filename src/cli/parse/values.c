@@ -39,6 +39,8 @@ plainsight_error plainsight_cli_parse_u64_arg(const char *value_text, uint64_t *
     return PLAINSIGHT_ERR_ARGS;
   }
 
+  // Larger byte counts use strtoull so payload sizes are not capped at 32 bits
+  // The full-string check rejects values such as "12mb" or "10 "
   errno = 0;
   parsed_value = strtoull(value_text, &end_ptr, 10);
   if (errno != 0 || end_ptr == value_text || end_ptr == NULL || *end_ptr != '\0') {
@@ -82,6 +84,7 @@ plainsight_error plainsight_cli_parse_density_arg(const char *value_text, uint16
 }
 
 plainsight_error plainsight_cli_reject_duplicate_arg(const char *flag_text) {
+  // Duplicate flags are rejected instead of letting the last value win silently
   (void)fputs("duplicate argument: ", stderr);
   (void)fputs(flag_text, stderr);
   (void)fputc('\n', stderr);

@@ -28,6 +28,8 @@ plainsight_error plainsight_cli_parse_hide_args(int argc, char **argv, plainsigh
   options->compression_mode = PLAINSIGHT_COMPRESSION_NONE;
   options->split_auto = 0;
 
+  // Defaults match the current supported backend
+  // Any future method must be accepted by plainsight_cli_parse_method first
   // Subcommand token is argv[1], options begin at argv[2]
   // Unknown flags fail early so callers do not run with partial state
   for (argument_index = 2; argument_index < argc; argument_index++) {
@@ -174,6 +176,7 @@ plainsight_error plainsight_cli_parse_hide_args(int argc, char **argv, plainsigh
     (void)fputs("missing required --passphrase-file for hide command\n", stderr);
     return PLAINSIGHT_ERR_ARGS;
   }
+  // Templates only make sense when multiple shard outputs may be written
   if (options->output_template != NULL && options->split_auto == 0) {
     (void)fputs("--output-template requires --split auto\n", stderr);
     return PLAINSIGHT_ERR_ARGS;

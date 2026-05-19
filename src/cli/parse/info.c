@@ -26,6 +26,7 @@ plainsight_error plainsight_cli_parse_info_args(int argc, char **argv, plainsigh
   options->density_per_mille = 1000u;
   options->json_output = 0;
 
+  // Info is the preflight path, so defaults must mirror hide without reading secrets
   for (argument_index = 2; argument_index < argc; argument_index++) {
     const char *argument_text = argv[argument_index];
 
@@ -107,6 +108,7 @@ plainsight_error plainsight_cli_parse_info_args(int argc, char **argv, plainsigh
     }
 
     if (strcmp(argument_text, "--json") == 0) {
+      // JSON is required so callers receive a stable machine-readable contract
       if (options->json_output != 0) {
         return plainsight_cli_reject_duplicate_arg(argument_text);
       }
@@ -128,6 +130,7 @@ plainsight_error plainsight_cli_parse_info_args(int argc, char **argv, plainsigh
     (void)fputs("missing required --json for info command\n", stderr);
     return PLAINSIGHT_ERR_ARGS;
   }
+  // Payload size can come from a real file or from the GUI's already-known byte count
   if (options->payload_path != NULL && options->payload_bytes_provided != 0) {
     (void)fputs("use either --payload or --payload-bytes, not both\n", stderr);
     return PLAINSIGHT_ERR_ARGS;

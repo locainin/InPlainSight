@@ -15,6 +15,7 @@ static void plainsight_cli_hide_copy_bytes(uint8_t *destination, size_t destinat
   }
 
   // Manual copy avoids unbounded C library calls and keeps the exact byte count visible
+  // Source and destination are distinct workspace buffers in all callers
   for (index = 0u; index < source_length; index++) {
     destination[index] = source[index];
   }
@@ -32,6 +33,7 @@ plainsight_error plainsight_cli_hide_choose_auto_compression(size_t payload_leng
   }
   *compressed_length_out = 0u;
 
+  // Low levels are tried first for speed, then a stronger level is allowed to win only if smaller
   for (level_index = 0u; level_index < (sizeof(zstd_auto_levels) / sizeof(zstd_auto_levels[0]));
        level_index++) {
     size_t candidate_length = 0u;
@@ -45,6 +47,7 @@ plainsight_error plainsight_cli_hide_choose_auto_compression(size_t payload_leng
       continue;
     }
     if (found_candidate == 0 || candidate_length < best_length) {
+      // Candidate bytes are copied into ciphertext scratch so the later pack step can reuse them
       if (candidate_length > sizeof(g_cli_workspace.ciphertext)) {
         return PLAINSIGHT_ERR_TOO_LARGE;
       }

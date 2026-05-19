@@ -21,6 +21,7 @@ plainsight_error plainsight_cli_split_resolve_output_path(const char *requested_
   }
 
   // Directory outputs may be entered as ~/..., so stat must see the expanded path
+  // The final returned path also uses the expanded directory to avoid shell-only syntax later
   result_code = plainsight_io_expand_home_path(requested_output_path, expanded_output_path,
                                                sizeof(expanded_output_path));
   if (result_code != PLAINSIGHT_OK) {
@@ -28,10 +29,12 @@ plainsight_error plainsight_cli_split_resolve_output_path(const char *requested_
   }
 
   if (stat(expanded_output_path, &output_metadata) == 0 && S_ISDIR(output_metadata.st_mode)) {
+    // Directory output is resolved after shard 0 decrypts the authenticated payload name
     return plainsight_cli_join_dir_and_name(expanded_output_path, payload_file_name, out, out_cap);
   }
 
   // Non-directory output is treated as an explicit final payload path
+  // Exclusive temp-file creation later refuses existing regular files
   while (requested_output_path[path_len] != '\0') {
     if (path_len + 1u >= out_cap) {
       return PLAINSIGHT_ERR_TOO_LARGE;
@@ -54,6 +57,7 @@ plainsight_error plainsight_cli_split_guess_payload_name(const uint8_t *payload_
 
   // Only cheap magic bytes are used
   // The output name is a fallback, not an authentication decision
+  // Authenticated shard contents have already been produced before this name is used
   if (payload_bytes != NULL && payload_len >= 5u && payload_bytes[0] == (uint8_t)'%' &&
       payload_bytes[1] == (uint8_t)'P' && payload_bytes[2] == (uint8_t)'D' &&
       payload_bytes[3] == (uint8_t)'F' && payload_bytes[4] == (uint8_t)'-') {
