@@ -28,16 +28,16 @@ pub fn compact_home_path(path_value: &Path) -> String {
     if path_value == home_dir {
         return "~".to_string();
     }
-    if let Ok(stripped_path) = path_value.strip_prefix(&home_dir) {
-        let stripped_text = stripped_path.to_string_lossy();
-        if stripped_text.is_empty() {
-            "~".to_string()
-        } else {
-            format!("~/{}", stripped_text)
-        }
-    } else {
-        path_text
-    }
+    path_value
+        .strip_prefix(&home_dir)
+        .map_or(path_text, |stripped_path| {
+            let stripped_text = stripped_path.to_string_lossy();
+            if stripped_text.is_empty() {
+                "~".to_string()
+            } else {
+                format!("~/{stripped_text}")
+            }
+        })
 }
 
 pub fn compact_home_text(path_text: &str) -> String {
