@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "cli_internal.h"
+#include "../internal.h"
 
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0

@@ -5,8 +5,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "../../include/info.h"
-#include "cli_internal.h"
+#include "../../../include/info.h"
+#include "../internal.h"
 
 #define PLAINSIGHT_MIME_OCTET_STREAM_LEN 24u
 

@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "cli_internal.h"
+#include "../internal.h"
 
 static const char *plainsight_cli_program_basename(const char *program_path) {
     const char *basename = NULL;

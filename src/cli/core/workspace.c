@@ -1,7 +1,7 @@
 // InPlainSight C module
 // Keep memory bounded: no heap allocation, explicit lengths, and checked cleanup paths
 
-#include "cli_internal.h"
+#include "../internal.h"
 
 // One static workspace avoids repeated large stack allocations
 // Single definition lives here so all CLI modules share one consistent store

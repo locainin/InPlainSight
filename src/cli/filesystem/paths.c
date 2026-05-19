@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "cli_internal.h"
+#include "../internal.h"
 
 static uint8_t plainsight_cli_hex_nibble(uint8_t value) {
     // Hex encoding keeps temp names ASCII-only and avoids locale-sensitive formatting
@@ -175,15 +175,15 @@ plainsight_error plainsight_cli_join_dir_and_name(const char *dir_path,
     return PLAINSIGHT_OK;
 }
 
-plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const plainsight_image *image) {
+plainsight_error plainsight_cli_store_image_atomic(const char *path, const plainsight_image *image) {
     char expanded_final_path[PLAINSIGHT_MAX_PATH_BYTES];
     char temp_name[256];
     char temp_path[1024];
+    const char *final_path = path;
     size_t final_index = 0u;
     size_t basename_start = 0u;
     size_t basename_len = 0u;
     size_t dot_index = 0u;
-    size_t temp_index = 0u;
     size_t prefix_len = 0u;
     size_t ext_len = 0u;
     size_t dir_prefix_len = 0u;
@@ -228,7 +228,7 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
     }
 
     basename_len = final_index - basename_start;
-    if (basename_len == 0u || basename_len + 8u >= sizeof(temp_name)) {
+    if (basename_len + 8u >= sizeof(temp_name)) {
         return PLAINSIGHT_ERR_TOO_LARGE;
     }
 
@@ -266,6 +266,7 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
     for (attempt = 0u; attempt < 16u; attempt++) {
         uint8_t suffix_bytes[8];
         char suffix_hex[16];
+        size_t temp_index = 0u;
         size_t suffix_index = 0u;
         size_t temp_name_len = 0u;
         int temp_exists = 0;
@@ -278,7 +279,6 @@ plainsight_error plainsight_cli_store_image_atomic(const char *final_path, const
 
         plainsight_cli_hex_encode_8_bytes(suffix_bytes, suffix_hex);
 
-        temp_index = 0u;
         temp_name[temp_index++] = '.';
         for (final_index = 0u; final_index < prefix_len; final_index++) {
             if (temp_index + 1u >= sizeof(temp_name)) {

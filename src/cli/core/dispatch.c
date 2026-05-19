@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../../include/cli.h"
-#include "cli_internal.h"
+#include "../../../include/cli.h"
+#include "../internal.h"
 
 static int plainsight_cli_argument_is_help(const char *argument_text) {
     if (argument_text == NULL) {
