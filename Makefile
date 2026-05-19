@@ -9,19 +9,30 @@ BUILD_DIR := build
 # Application source list grouped by module
 APP_SRCS := \
 	src/main.c \
-	src/cli/cli_workspace.c \
-	src/cli/cli_common.c \
-	src/cli/cli_parse.c \
-	src/cli/cli_hide.c \
-	src/cli/cli_hide_split.c \
-	src/cli/cli_extract.c \
-	src/cli/cli_extract_split.c \
-	src/cli/cli_info.c \
-	src/cli/cli_dispatch.c \
-	src/cli/cli_paths.c \
-	src/cli/cli_fileops.c \
-	src/cli/cli_split_naming.c \
-	src/cli/cli_split_shard_extract.c \
+	src/cli/core/workspace.c \
+	src/cli/common/image_io.c \
+	src/cli/parse/values.c \
+	src/cli/parse/hide.c \
+	src/cli/parse/extract.c \
+	src/cli/parse/info.c \
+	src/cli/hide/write_single.c \
+	src/cli/hide/report_single.c \
+	src/cli/hide/compress_single.c \
+	src/cli/hide/write_shards.c \
+	src/cli/hide/report_shards.c \
+	src/cli/hide/cleanup_shards.c \
+	src/cli/hide/shard_writer.c \
+	src/cli/extract/recover_single.c \
+	src/cli/extract/recover_split.c \
+	src/cli/info/command.c \
+	src/cli/core/dispatch.c \
+	src/cli/filesystem/paths.c \
+	src/cli/filesystem/fileops.c \
+	src/cli/split/naming.c \
+	src/cli/split/shard_read.c \
+	src/cli/split/shard_set_scan.c \
+	src/cli/split/payload_assembly.c \
+	src/cli/split/output_resolution.c \
 	src/error.c \
 	src/capacity.c \
 	src/info.c \
