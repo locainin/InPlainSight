@@ -156,7 +156,7 @@ CLANG_SAN_TEST_BINS := \
 	audit-gcc audit-clang verify-gcc verify-clang verify \
 	rust-fmt rust-clippy rust-test verify-rust verify-all \
 	rust-clean clean-all verify-all-clean \
-	compile-commands c-tidy verify-c
+	compile-commands c-tidy cppcheck verify-c
 
 all: gcc-release
 
@@ -365,7 +365,7 @@ rust-test:
 
 verify-rust: rust-fmt rust-clippy rust-test
 
-verify-c: verify compile-commands c-tidy
+verify-c: verify compile-commands c-tidy cppcheck
 
 verify-all: verify-c verify-rust
 
@@ -396,3 +396,7 @@ c-tidy: compile-commands
 	# Only macro-parentheses is excluded because libpng system macros trip it outside project code
 	run-clang-tidy -p . -warnings-as-errors='*' \
 		-checks='clang-analyzer-*,bugprone-*,-bugprone-macro-parentheses'
+
+cppcheck:
+	# cppcheck gets the project include root and suppresses only parser noise from unavailable system headers
+	cppcheck . --enable=all --inconclusive --std=c11 --check-level=exhaustive --quiet --error-exitcode=1 --suppress=missingIncludeSystem --suppress=checkersReport -I include
